@@ -3,77 +3,59 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Login</title>
+<title>Login - Controle Financeiro</title>
+
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<meta name="theme-color" content="#d4af37">
 
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
 <style>
 body {
-    background-color: #0f0f0f;
-    color: #eaeaea;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: #0e0e11;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
 }
-
 .card-login {
-    background-color: #151515;
-    border: 1px solid #222;
-    border-radius: 12px;
+    background: #17171c;
+    padding: 30px;
+    border-radius: 20px;
+    width: 100%;
+    max-width: 400px;
 }
-
-.form-control {
-    background-color: #1a1a1a;
-    border: 1px solid #2a2a2a;
-    color: white;
-}
-
-.form-control:focus {
-    background-color: #1a1a1a;
-    color: white;
-    border-color: #d4af37;
-    box-shadow: none;
-}
-
-.btn-minimal {
-    background-color: #d4af37;
+.btn-gold {
+    background: linear-gradient(90deg, #d4af37, #f4d03f);
     border: none;
     color: black;
-    font-weight: 600;
-}
-
-.btn-minimal:hover {
-    opacity: 0.9;
-}
-
-.link-minimal {
-    color: #aaa;
-    font-size: 0.85rem;
-    text-decoration: none;
-}
-
-.link-minimal:hover {
-    color: #d4af37;
+    font-weight: bold;
 }
 </style>
 </head>
 
-<body class="d-flex align-items-center justify-content-center vh-100">
+<body>
 
-<div class="card card-login p-4 shadow" style="width: 350px;">
-
-    <h5 class="mb-4 text-center">Finance</h5>
+<div class="card-login">
+    <h3 class="text-center mb-4">Controle Financeiro</h3>
 
     <form method="POST">
         <input type="email" name="email" class="form-control mb-3" placeholder="Email" required>
         <input type="password" name="senha" class="form-control mb-3" placeholder="Senha" required>
-        <button class="btn btn-minimal w-100 mb-3">Entrar</button>
+        <button class="btn btn-gold w-100">Entrar</button>
     </form>
 
-    <div class="d-flex justify-content-between">
-        <a href="/cadastro" class="link-minimal">Criar conta</a>
-        <a href="/recuperar" class="link-minimal">Esqueci a senha</a>
+    <div class="text-center mt-3">
+        <a href="/cadastro" class="text-warning">Criar conta</a>
     </div>
-
 </div>
+
+<script>
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/static/sw.js");
+}
+</script>
 
 </body>
 </html>
