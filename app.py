@@ -25,54 +25,8 @@ def brl(valor):
         return "R$ 0,00"
 
 
-# ================= CRIAR TABELAS =================
-def criar_tabelas():
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS usuarios (
-        id SERIAL PRIMARY KEY,
-        nome TEXT,
-        email TEXT UNIQUE,
-        senha TEXT,
-        role TEXT DEFAULT 'user'
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS configuracoes (
-        usuario_id INTEGER PRIMARY KEY,
-        salario NUMERIC DEFAULT 0,
-        meta NUMERIC DEFAULT 1000
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS gastos (
-        id SERIAL PRIMARY KEY,
-        usuario_id INTEGER,
-        descricao TEXT,
-        valor NUMERIC,
-        categoria TEXT,
-        data DATE
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS prioridades (
-        id SERIAL PRIMARY KEY,
-        usuario_id INTEGER,
-        nome TEXT,
-        valor NUMERIC
-    )
-    """)
-
-    conn.commit()
-    conn.close()
 
 
-criar_tabelas()
 
 
 # ================= LOGIN =================
