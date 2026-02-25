@@ -75,11 +75,7 @@ def criar_tabelas():
     conn.close()
 
 
-try:
-    criar_tabelas()
-    garantir_coluna_role()
-except Exception as e:
-    print("Erro inicialização:", e)
+
 
 
 # ================= FILTRO BRL =================
