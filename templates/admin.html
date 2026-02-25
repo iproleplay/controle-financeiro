@@ -7,30 +7,34 @@
 <body class="bg-dark text-light">
 
 <div class="container mt-5">
-    <h3>Usuários Cadastrados</h3>
+    <h3>Painel Administrativo</h3>
 
-    {% if usuarios %}
-        <table class="table table-dark table-striped mt-4">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Nome</th>
-                    <th>Email</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for u in usuarios %}
-                <tr>
-                    <td>{{ u.id }}</td>
-                    <td>{{ u.nome }}</td>
-                    <td>{{ u.email }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <p>Nenhum usuário encontrado.</p>
-    {% endif %}
+    <table class="table table-dark table-striped mt-4">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>Email</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in usuarios %}
+            <tr>
+                <td>{{ u.id }}</td>
+                <td>{{ u.nome }}</td>
+                <td>{{ u.email }}</td>
+                <td>
+                    <a href="/admin/editar/{{ u.id }}" class="btn btn-warning btn-sm">Editar</a>
+                    <a href="/admin/excluir/{{ u.id }}" class="btn btn-danger btn-sm"
+                       onclick="return confirm('Tem certeza que deseja excluir este usuário?')">
+                       Excluir
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 
 </div>
 

@@ -266,3 +266,57 @@ def admin():
     conn.close()
 
     return render_template("admin.html", usuarios=usuarios)
+
+@app.route("/admin/editar/<int:user_id>", methods=["GET", "POST"])
+def editar_usuario(user_id):
+
+    if "usuario_id" not in session:
+        return redirect("/")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    if request.method == "POST":
+        nome = request.form["nome"]
+        email = request.form["email"]
+        senha = request.form.get("senha")
+
+        if senha:
+            senha_hash = generate_password_hash(senha)
+            cursor.execute("""
+                UPDATE usuarios
+                SET nome=%s, email=%s, senha=%s
+                WHERE id=%s
+            """, (nome, email, senha_hash, user_id))
+        else:
+            cursor.execute("""
+                UPDATE usuarios
+                SET nome=%s, email=%s
+                WHERE id=%s
+            """, (nome, email, user_id))
+
+        conn.commit()
+        conn.close()
+        return redirect("/admin")
+
+    cursor.execute("SELECT id, nome, email FROM usuarios WHERE id=%s", (user_id,))
+    usuario = cursor.fetchone()
+
+    conn.close()
+
+    return render_template("editar_usuario.html", usuario=usuario)
+
+@app.route("/admin/excluir/<int:user_id>")
+def excluir_usuario(user_id):
+
+    if "usuario_id" not in session:
+        return redirect("/")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM usuarios WHERE id=%s", (user_id,))
+    conn.commit()
+    conn.close()
+
+    return redirect("/admin")
