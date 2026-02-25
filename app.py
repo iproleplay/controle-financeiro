@@ -2,8 +2,8 @@ from flask import Flask, render_template, request, redirect, session
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
+import os
 
-# ================= APP =================
 app = Flask(__name__)
 app.secret_key = "segredo_super_forte"
 
@@ -17,7 +17,7 @@ def brl(valor):
         return "R$ 0,00"
 
 
-# ================= CRIAR BANCO =================
+# ================= BANCO =================
 def criar_banco():
     conn = sqlite3.connect("financeiro.db")
     cursor = conn.cursor()
@@ -123,7 +123,6 @@ def dashboard():
         return redirect("/")
 
     usuario_id = session["usuario_id"]
-
     conn = sqlite3.connect("financeiro.db")
     cursor = conn.cursor()
 
@@ -134,23 +133,10 @@ def dashboard():
     meta = config[1] if config and config[1] else 1000
 
     if request.method == "POST":
-
         tipo = request.form.get("tipo")
 
-        if tipo == "salario":
-            salario = float(request.form["salario"])
-
-            cursor.execute("""
-            INSERT INTO configuracoes (usuario_id, salario, meta)
-            VALUES (?, ?, ?)
-            ON CONFLICT(usuario_id)
-            DO UPDATE SET salario=excluded.salario
-            """, (usuario_id, salario, meta))
-            conn.commit()
-
-        elif tipo == "meta":
+        if tipo == "meta":
             meta = float(request.form["meta"])
-
             cursor.execute("""
             INSERT INTO configuracoes (usuario_id, salario, meta)
             VALUES (?, ?, ?)
@@ -171,17 +157,6 @@ def dashboard():
             """, (usuario_id, descricao, valor, categoria, data_atual))
             conn.commit()
 
-        elif tipo == "prioridade":
-            nome_p = request.form["nome"]
-            valor_p = float(request.form["valor"])
-
-            cursor.execute("""
-            INSERT INTO prioridades (usuario_id, nome, valor)
-            VALUES (?, ?, ?)
-            """, (usuario_id, nome_p, valor_p))
-            conn.commit()
-
-    # ================= TOTAIS =================
     cursor.execute("SELECT SUM(valor) FROM gastos WHERE usuario_id=?", (usuario_id,))
     total_gastos = cursor.fetchone()[0] or 0
 
@@ -189,13 +164,9 @@ def dashboard():
     total_prioridades = cursor.fetchone()[0] or 0
 
     saldo = salario - total_gastos - total_prioridades
-
     progresso = min((saldo / meta) * 100, 100) if meta > 0 else 0
     falta = max(meta - saldo, 0)
-    meta_atingida = progresso >= 100
-
-    reserva_ideal = salario * 6
-    progresso_reserva = min((saldo / reserva_ideal) * 100, 100) if reserva_ideal > 0 else 0
+    patrimonio = saldo
 
     cursor.execute("""
         SELECT categoria, SUM(valor)
@@ -220,14 +191,7 @@ def dashboard():
         "09": "Set", "10": "Out", "11": "Nov", "12": "Dez"
     }
 
-    evolucao_mensal = [(meses_dict.get(mes, mes), valor) for mes, valor in dados_mensais]
-
-    if len(evolucao_mensal) >= 2:
-        variacao_mensal = evolucao_mensal[-1][1] - evolucao_mensal[-2][1]
-    else:
-        variacao_mensal = 0
-
-    patrimonio = saldo
+    evolucao_mensal = [(meses_dict.get(m, m), v) for m, v in dados_mensais]
 
     conn.close()
 
@@ -239,13 +203,9 @@ def dashboard():
         meta=meta,
         progresso=progresso,
         falta=falta,
-        meta_atingida=meta_atingida,
-        reserva_ideal=reserva_ideal,
-        progresso_reserva=progresso_reserva,
+        patrimonio=patrimonio,
         resumo_categoria=resumo_categoria,
         evolucao_mensal=evolucao_mensal,
-        variacao_mensal=variacao_mensal,
-        patrimonio=patrimonio,
         total_prioridades=total_prioridades
     )
 
@@ -296,5 +256,7 @@ def logout():
     return redirect("/")
 
 
+# ================= RENDER PORT FIX =================
 if __name__ == "__main__":
-    app.run()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
