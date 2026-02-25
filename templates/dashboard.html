@@ -43,6 +43,10 @@ body {
     border-radius: 10px;
 }
 
+.progress {
+    background-color: #1b1b22;
+}
+
 canvas {
     max-width: 300px;
     margin: auto;
@@ -54,17 +58,34 @@ canvas {
 
 <div class="container py-4">
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h5>Olá, {{ nome }}</h5>
-    <div>
-        {% if session.role == 'admin' %}
-        <a href="/admin" class="btn btn-outline-warning btn-sm">Admin</a>
-        {% endif %}
-        <a href="/logout" class="btn btn-outline-light btn-sm">Sair</a>
+<!-- 🔹 HEADER -->
+<div class="card-premium mb-4">
+    <div class="d-flex justify-content-between align-items-center">
+
+        <div>
+            <h5 class="mb-0">Olá, {{ nome }}</h5>
+            <small class="text-muted">
+                {% if session.role == 'admin' %}
+                    Conta Administrador
+                {% else %}
+                    Conta Padrão
+                {% endif %}
+            </small>
+        </div>
+
+        <div>
+            {% if session.role == 'admin' %}
+            <a href="/admin" class="btn btn-outline-warning btn-sm">Admin</a>
+            {% endif %}
+            <a href="/logout" class="btn btn-outline-light btn-sm">Sair</a>
+        </div>
+
     </div>
 </div>
 
+<!-- 🔹 CARDS FINANCEIROS -->
 <div class="row mb-4">
+
     <div class="col-md-4">
         <div class="card-premium text-center">
             <small>Saldo Atual</small>
@@ -90,9 +111,12 @@ canvas {
             </div>
         </div>
     </div>
+
 </div>
 
+<!-- 🔹 FORM + GRÁFICO -->
 <div class="row mb-4">
+
     <div class="col-md-4">
         <div class="card-premium">
             <h6>Adicionar Gasto</h6>
@@ -118,8 +142,10 @@ canvas {
             <canvas id="graficoCategoria"></canvas>
         </div>
     </div>
+
 </div>
 
+<!-- 🔹 HISTÓRICO -->
 <div class="card-premium mt-4">
     <h6 class="mb-3">Histórico Mensal</h6>
 
