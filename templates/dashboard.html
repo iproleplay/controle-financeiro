@@ -6,192 +6,118 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-body{
-    background:#0f172a;
-    color:white;
-    font-family:Arial, sans-serif;
-    margin:0;
-    padding:20px;
-}
-
-h1{
-    text-align:center;
-    margin-bottom:10px;
-}
-
-.subinfo{
-    text-align:center;
-    margin-bottom:30px;
-    font-size:14px;
-    opacity:0.8;
-}
-
-.grid{
-    display:grid;
-    grid-template-columns: 1fr 1fr;
-    gap:25px;
-}
-
-.card{
-    background:#1e293b;
-    padding:20px;
-    border-radius:12px;
-    box-shadow:0 0 15px rgba(0,0,0,0.4);
-}
-
-.card h3{
-    margin-bottom:15px;
-}
-
-.resumo-topo{
-    display:flex;
-    justify-content:space-around;
-    margin-bottom:25px;
-}
-
-.resumo-box{
-    background:#1e293b;
-    padding:15px;
-    border-radius:10px;
-    width:23%;
-    text-align:center;
-}
-
-canvas{
-    max-height:320px;
-}
+body{background:#0f172a;color:white;font-family:Arial;margin:0;padding:20px;}
+h1{text-align:center;margin-bottom:10px;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:25px;}
+.card{background:#1e293b;padding:20px;border-radius:12px;box-shadow:0 0 15px rgba(0,0,0,0.4);}
+input,select,button{padding:8px;border-radius:6px;border:none;margin:5px 0;}
+button{background:#3b82f6;color:white;cursor:pointer;}
+.resumo-topo{display:flex;justify-content:space-around;margin-bottom:25px;}
+.resumo-box{background:#1e293b;padding:15px;border-radius:10px;width:30%;text-align:center;}
+canvas{max-height:320px;}
 </style>
 </head>
 <body>
 
 <h1>📊 Dashboard Financeiro</h1>
-<div class="subinfo">Usuário: {{ nome }}</div>
 
-<!-- ================= RESUMO TOPO ================= -->
+<div class="card" style="margin-bottom:25px;">
+<h3>💰 Definir Renda Mensal</h3>
+<form method="POST">
+<input type="hidden" name="tipo" value="renda">
+<input type="number" step="0.01" name="renda" placeholder="Digite sua renda mensal" required>
+<button type="submit">Salvar</button>
+</form>
+<p>Renda Atual: {{ renda_mensal | brl }}</p>
+</div>
+
+<div class="card" style="margin-bottom:25px;">
+<h3>➕ Adicionar Gasto</h3>
+<form method="POST">
+<input type="hidden" name="tipo" value="gasto">
+<input type="text" name="descricao" placeholder="Descrição" required>
+<input type="number" step="0.01" name="valor" placeholder="Valor" required>
+<select name="categoria" required>
+<option value="">Selecione</option>
+<option>Aluguel</option>
+<option>Energia</option>
+<option>Internet</option>
+<option>Cartão</option>
+<option>Mercado</option>
+<option>Outros</option>
+</select>
+<button type="submit">Adicionar</button>
+</form>
+</div>
+
 <div class="resumo-topo">
-    <div class="resumo-box">
-        <h4>Saldo Atual</h4>
-        <p>{{ saldo | brl }}</p>
-    </div>
-
-    <div class="resumo-box">
-        <h4>Mês Atual</h4>
-        <p>{{ mes_atual_total | brl }}</p>
-    </div>
-
-    <div class="resumo-box">
-        <h4>Mês Anterior</h4>
-        <p>{{ mes_anterior_total | brl }}</p>
-    </div>
-
-    <div class="resumo-box">
-        <h4>Variação</h4>
-        <p>{{ "%.2f"|format(variacao_percentual) }}%</p>
-    </div>
+<div class="resumo-box">
+<h4>Renda</h4>
+<p>{{ renda_mensal | brl }}</p>
+</div>
+<div class="resumo-box">
+<h4>Total Gastos</h4>
+<p>{{ (renda_mensal - saldo) | brl }}</p>
+</div>
+<div class="resumo-box">
+<h4>Saldo</h4>
+<p>{{ saldo | brl }}</p>
+</div>
 </div>
 
 <div class="grid">
+<div class="card">
+<h3>🎯 Gastos por Categoria</h3>
+<canvas id="graficoCategoria"></canvas>
+</div>
 
-    <!-- ================= GRAFICO BOLINHA ================= -->
-    <div class="card">
-        <h3>🎯 Gastos por Categoria</h3>
-        <canvas id="graficoCategoria"></canvas>
-    </div>
-
-    <!-- ================= HISTORICO MENSAL ================= -->
-    <div class="card">
-        <h3>📈 Evolução Mensal</h3>
-        <canvas id="graficoMensal"></canvas>
-    </div>
-
+<div class="card">
+<h3>📈 Evolução Mensal</h3>
+<canvas id="graficoMensal"></canvas>
+</div>
 </div>
 
 <script>
+const resumoCategoria = {{ resumo_categoria | tojson }};
+const evolucaoMensal = {{ evolucao_mensal | tojson }};
 
-    // ================= DADOS DO FLASK =================
-    const resumoCategoria = {{ resumo_categoria | tojson }};
-    const evolucaoMensal = {{ evolucao_mensal | tojson }};
+new Chart(document.getElementById("graficoCategoria"),{
+type:"doughnut",
+data:{
+labels:resumoCategoria.map(i=>i[0]),
+datasets:[{
+data:resumoCategoria.map(i=>i[1]),
+backgroundColor:["#ef4444","#3b82f6","#facc15","#22c55e","#a855f7","#f97316"]
+}]
+},
+options:{
+plugins:{
+legend:{position:"bottom",labels:{color:"white"}},
+tooltip:{callbacks:{label:(c)=>c.label+": R$ "+c.parsed.toFixed(2)}}
+}
+}
+});
 
-    // ===== GRAFICO BOLINHA =====
-    const labelsCategoria = resumoCategoria.map(item => item[0]);
-    const valoresCategoria = resumoCategoria.map(item => item[1]);
-
-    new Chart(
-        document.getElementById("graficoCategoria"),
-        {
-            type:"doughnut",
-            data:{
-                labels:labelsCategoria,
-                datasets:[{
-                    data:valoresCategoria,
-                    backgroundColor:[
-                        "#ef4444",
-                        "#3b82f6",
-                        "#facc15",
-                        "#22c55e",
-                        "#a855f7",
-                        "#f97316"
-                    ],
-                    borderWidth:2
-                }]
-            },
-            options:{
-                plugins:{
-                    legend:{
-                        position:"bottom",
-                        labels:{ color:"white" }
-                    },
-                    tooltip:{
-                        callbacks:{
-                            label:function(context){
-                                return context.label + ": R$ " + context.parsed.toFixed(2);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    );
-
-    // ===== HISTORICO MENSAL =====
-    const labelsMes = evolucaoMensal.map(item => item[0]);
-    const valoresMes = evolucaoMensal.map(item => item[1]);
-
-    new Chart(
-        document.getElementById("graficoMensal"),
-        {
-            type:"line",
-            data:{
-                labels:labelsMes,
-                datasets:[{
-                    label:"Total por Mês",
-                    data:valoresMes,
-                    tension:0.3,
-                    borderColor:"#3b82f6",
-                    fill:false
-                }]
-            },
-            options:{
-                plugins:{
-                    legend:{
-                        labels:{ color:"white" }
-                    },
-                    tooltip:{
-                        callbacks:{
-                            label:function(context){
-                                return "R$ " + context.parsed.y.toFixed(2);
-                            }
-                        }
-                    }
-                },
-                scales:{
-                    x:{ ticks:{ color:"white" }},
-                    y:{ beginAtZero:true, ticks:{ color:"white" }}
-                }
-            }
-        }
-    );
-
+new Chart(document.getElementById("graficoMensal"),{
+type:"line",
+data:{
+labels:evolucaoMensal.map(i=>i[0]),
+datasets:[{
+label:"Total por Mês",
+data:evolucaoMensal.map(i=>i[1]),
+borderColor:"#3b82f6",
+tension:0.3,
+fill:false
+}]
+},
+options:{
+plugins:{legend:{labels:{color:"white"}}},
+scales:{
+x:{ticks:{color:"white"}},
+y:{ticks:{color:"white"},beginAtZero:true}
+}
+}
+});
 </script>
 
 </body>

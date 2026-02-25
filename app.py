@@ -3,7 +3,7 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "segredo_super_forte")
@@ -41,7 +41,6 @@ def login():
         if user and check_password_hash(user["senha"], senha):
             session["usuario_id"] = user["id"]
             session["nome"] = user["nome"]
-            session["role"] = user.get("role", "user")
             return redirect("/dashboard")
         else:
             return "Login inválido"
@@ -86,8 +85,19 @@ def dashboard():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # ---------- ADICIONAR GASTO ----------
-    if request.method == "POST":
+    # ===== SALVAR RENDA =====
+    if request.method == "POST" and request.form.get("tipo") == "renda":
+        renda = request.form.get("renda")
+        if renda:
+            cursor.execute("""
+                UPDATE usuarios
+                SET renda_mensal=%s
+                WHERE id=%s
+            """, (float(renda), usuario_id))
+            conn.commit()
+
+    # ===== SALVAR GASTO =====
+    if request.method == "POST" and request.form.get("tipo") == "gasto":
         descricao = request.form.get("descricao")
         valor = request.form.get("valor")
         categoria = request.form.get("categoria")
@@ -99,13 +109,17 @@ def dashboard():
             """, (usuario_id, descricao, float(valor), categoria, datetime.now().date()))
             conn.commit()
 
-    # ---------- TOTAL GASTOS ----------
+    # ===== PEGAR RENDA =====
+    cursor.execute("SELECT renda_mensal FROM usuarios WHERE id=%s", (usuario_id,))
+    renda_mensal = float(cursor.fetchone()["renda_mensal"] or 0)
+
+    # ===== TOTAL GASTOS =====
     cursor.execute("SELECT SUM(valor) AS total FROM gastos WHERE usuario_id=%s", (usuario_id,))
     total_gastos = float(cursor.fetchone()["total"] or 0)
 
-    saldo = -total_gastos
+    saldo = renda_mensal - total_gastos
 
-    # ---------- RESUMO CATEGORIA ----------
+    # ===== RESUMO POR CATEGORIA =====
     cursor.execute("""
         SELECT categoria, SUM(valor) AS total
         FROM gastos
@@ -113,11 +127,9 @@ def dashboard():
         GROUP BY categoria
     """, (usuario_id,))
 
-    resumo_categoria = []
-    for row in cursor.fetchall():
-        resumo_categoria.append((row["categoria"], float(row["total"])))
+    resumo_categoria = [(row["categoria"], float(row["total"])) for row in cursor.fetchall()]
 
-    # ---------- EVOLUÇÃO MENSAL ----------
+    # ===== EVOLUÇÃO MENSAL =====
     cursor.execute("""
         SELECT DATE_TRUNC('month', data) AS mes,
                SUM(valor) AS total
@@ -135,40 +147,15 @@ def dashboard():
         nome_mes = f"{meses_pt[data_mes.month - 1]}/{data_mes.year}"
         evolucao_mensal.append((nome_mes, float(row["total"])))
 
-    # ---------- COMPARAÇÃO MENSAL ----------
-    cursor.execute("""
-        SELECT DATE_TRUNC('month', data) AS mes,
-               SUM(valor) AS total
-        FROM gastos
-        WHERE usuario_id=%s
-        GROUP BY mes
-        ORDER BY mes DESC
-        LIMIT 2
-    """, (usuario_id,))
-
-    comparacao = cursor.fetchall()
-
-    mes_atual_total = float(comparacao[0]["total"]) if len(comparacao) > 0 else 0
-    mes_anterior_total = float(comparacao[1]["total"]) if len(comparacao) > 1 else 0
-
-    variacao_percentual = 0
-    if mes_anterior_total > 0:
-        variacao_percentual = ((mes_atual_total - mes_anterior_total) / mes_anterior_total) * 100
-
     conn.close()
 
     return render_template(
         "dashboard.html",
         nome=session["nome"],
+        renda_mensal=renda_mensal,
         saldo=saldo,
-        meta=0,
-        progresso=0,
-        historico={},
         resumo_categoria=resumo_categoria,
-        evolucao_mensal=evolucao_mensal,
-        mes_atual_total=mes_atual_total,
-        mes_anterior_total=mes_anterior_total,
-        variacao_percentual=variacao_percentual
+        evolucao_mensal=evolucao_mensal
     )
 
 
@@ -176,3 +163,13 @@ def dashboard():
 def logout():
     session.clear()
     return redirect("/")
+
+
+@app.route("/criar_coluna")
+def criar_coluna():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS renda_mensal NUMERIC;")
+    conn.commit()
+    conn.close()
+    return "Coluna criada com sucesso!"
