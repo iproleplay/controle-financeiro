@@ -7,6 +7,9 @@ import os
 app = Flask(__name__)
 app.secret_key = "segredo_super_forte"
 
+# ================= CAMINHO DO BANCO =================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "financeiro.db")
 
 # ================= FILTRO BRL =================
 @app.template_filter("brl")
@@ -16,10 +19,9 @@ def brl(valor):
     except:
         return "R$ 0,00"
 
-
 # ================= BANCO =================
 def criar_banco():
-    conn = sqlite3.connect("financeiro.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -62,9 +64,7 @@ def criar_banco():
     conn.commit()
     conn.close()
 
-
 criar_banco()
-
 
 # ================= CADASTRO =================
 @app.route("/cadastro", methods=["GET", "POST"])
@@ -74,7 +74,7 @@ def cadastro():
         email = request.form["email"]
         senha = generate_password_hash(request.form["senha"])
 
-        conn = sqlite3.connect("financeiro.db")
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
         try:
@@ -91,7 +91,6 @@ def cadastro():
 
     return render_template("cadastro.html")
 
-
 # ================= LOGIN =================
 @app.route("/", methods=["GET", "POST"])
 def login():
@@ -99,7 +98,7 @@ def login():
         email = request.form["email"]
         senha = request.form["senha"]
 
-        conn = sqlite3.connect("financeiro.db")
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT id, nome, senha FROM usuarios WHERE email=?", (email,))
         user = cursor.fetchone()
@@ -114,7 +113,6 @@ def login():
 
     return render_template("login.html")
 
-
 # ================= DASHBOARD =================
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
@@ -123,7 +121,7 @@ def dashboard():
         return redirect("/")
 
     usuario_id = session["usuario_id"]
-    conn = sqlite3.connect("financeiro.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("SELECT salario, meta FROM configuracoes WHERE usuario_id=?", (usuario_id,))
@@ -209,7 +207,6 @@ def dashboard():
         total_prioridades=total_prioridades
     )
 
-
 # ================= PRIORIDADES =================
 @app.route("/prioridades", methods=["GET", "POST"])
 def prioridades():
@@ -218,7 +215,7 @@ def prioridades():
         return redirect("/")
 
     usuario_id = session["usuario_id"]
-    conn = sqlite3.connect("financeiro.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     if request.method == "POST":
@@ -249,14 +246,9 @@ def prioridades():
         total_prioridades=total_prioridades
     )
 
-
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect("/")
 
-
-# ================= RENDER PORT FIX =================
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+# IMPORTANTE: NÃO COLOCAR app.run() para produção com gunicorn
