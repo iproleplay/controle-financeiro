@@ -16,6 +16,18 @@ def get_connection():
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
 
+# ================= GARANTIR COLUNA ROLE =================
+def garantir_coluna_role():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        ALTER TABLE usuarios
+        ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';
+    """)
+    conn.commit()
+    conn.close()
+
+
 # ================= FILTRO BRL =================
 @app.template_filter("brl")
 def brl(valor):
@@ -25,8 +37,59 @@ def brl(valor):
         return "R$ 0,00"
 
 
+# ================= CRIAR TABELAS =================
+def criar_tabelas():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id SERIAL PRIMARY KEY,
+        nome TEXT,
+        email TEXT UNIQUE,
+        senha TEXT,
+        role TEXT DEFAULT 'user'
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS configuracoes (
+        usuario_id INTEGER PRIMARY KEY,
+        salario NUMERIC DEFAULT 0,
+        meta NUMERIC DEFAULT 1000
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS gastos (
+        id SERIAL PRIMARY KEY,
+        usuario_id INTEGER,
+        descricao TEXT,
+        valor NUMERIC,
+        categoria TEXT,
+        data DATE
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS prioridades (
+        id SERIAL PRIMARY KEY,
+        usuario_id INTEGER,
+        nome TEXT,
+        valor NUMERIC
+    )
+    """)
+
+    conn.commit()
+    conn.close()
 
 
+# Executa criação segura
+try:
+    criar_tabelas()
+    garantir_coluna_role()
+except Exception as e:
+    print("Erro na inicialização:", e)
 
 
 # ================= LOGIN =================
@@ -45,7 +108,7 @@ def login():
         if user and check_password_hash(user["senha"], senha):
             session["usuario_id"] = user["id"]
             session["nome"] = user["nome"]
-            session["role"] = user["role"]
+            session["role"] = user.get("role", "user")
             return redirect("/dashboard")
         else:
             return "Login inválido"
@@ -209,70 +272,11 @@ def admin():
 
     conn = get_connection()
     cursor = conn.cursor()
-
     cursor.execute("SELECT id, nome, email, role FROM usuarios ORDER BY id DESC")
     usuarios = cursor.fetchall()
-
     conn.close()
 
     return render_template("admin.html", usuarios=usuarios)
-
-
-@app.route("/admin/editar/<int:user_id>", methods=["GET", "POST"])
-def editar_usuario(user_id):
-
-    if session.get("role") != "admin":
-        return "Acesso restrito"
-
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    if request.method == "POST":
-        nome = request.form["nome"]
-        email = request.form["email"]
-        senha = request.form.get("senha")
-        role = request.form["role"]
-
-        if senha:
-            senha_hash = generate_password_hash(senha)
-            cursor.execute("""
-                UPDATE usuarios
-                SET nome=%s, email=%s, senha=%s, role=%s
-                WHERE id=%s
-            """, (nome, email, senha_hash, role, user_id))
-        else:
-            cursor.execute("""
-                UPDATE usuarios
-                SET nome=%s, email=%s, role=%s
-                WHERE id=%s
-            """, (nome, email, role, user_id))
-
-        conn.commit()
-        conn.close()
-        return redirect("/admin")
-
-    cursor.execute("SELECT id, nome, email, role FROM usuarios WHERE id=%s", (user_id,))
-    usuario = cursor.fetchone()
-
-    conn.close()
-
-    return render_template("editar_usuario.html", usuario=usuario)
-
-
-@app.route("/admin/excluir/<int:user_id>")
-def excluir_usuario(user_id):
-
-    if session.get("role") != "admin":
-        return "Acesso restrito"
-
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("DELETE FROM usuarios WHERE id=%s", (user_id,))
-    conn.commit()
-    conn.close()
-
-    return redirect("/admin")
 
 
 @app.route("/logout")
