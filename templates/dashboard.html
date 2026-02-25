@@ -13,32 +13,50 @@
 
 <style>
 body {
-    background-color: #0e0e11;
-    color: white;
-    font-family: Arial, sans-serif;
+    background: linear-gradient(145deg, #0e0e11, #141418);
+    color: #f1f1f1;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .card-premium {
-    background: #17171c;
+    background: linear-gradient(145deg, #17171c, #111114);
+    border: 1px solid #23232a;
     border-radius: 20px;
-    padding: 20px;
+    padding: 22px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.4);
     margin-bottom: 20px;
+}
+
+.valor-grande {
+    font-size: 1.6rem;
+    font-weight: 600;
 }
 
 .btn-gold {
     background: linear-gradient(90deg, #d4af37, #f4d03f);
     border: none;
     color: black;
-    font-weight: bold;
+    font-weight: 600;
+    border-radius: 12px;
 }
 
 .progress {
-    height: 12px;
+    height: 10px;
+    border-radius: 10px;
+    background-color: #222;
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, #d4af37, #f4d03f);
 }
 
 .item-linha {
     border-bottom: 1px solid #2a2a33;
-    padding: 8px 0;
+    padding: 10px 0;
+}
+
+canvas {
+    max-height: 250px;
 }
 </style>
 </head>
@@ -47,160 +65,149 @@ body {
 
 <div class="container py-4">
 
-    <div class="d-flex justify-content-between mb-4">
-        <h5>Olá, {{ nome }}</h5>
-        <a href="/logout" class="btn btn-outline-light btn-sm">Sair</a>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h5>Olá, {{ nome }}</h5>
+    <a href="/logout" class="btn btn-outline-light btn-sm">Sair</a>
+</div>
+
+<!-- RESUMO -->
+<div class="row">
+    <div class="col-md-4">
+        <div class="card-premium text-center">
+            <small>Salário</small>
+            <div class="valor-grande text-warning">{{ salario | brl }}</div>
+        </div>
     </div>
 
-    <!-- RESUMO -->
-    <div class="row">
-        <div class="col-md-4">
-            <div class="card-premium text-center">
-                <small>Salário</small>
-                <h5 class="text-warning">{{ salario | brl }}</h5>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card-premium text-center">
-                <small>Saldo</small>
-                <h5 class="{% if saldo >= 0 %}text-success{% else %}text-danger{% endif %}">
-                    {{ saldo | brl }}
-                </h5>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card-premium text-center">
-                <small>Patrimônio</small>
-                <h5 class="text-info">{{ patrimonio | brl }}</h5>
+    <div class="col-md-4">
+        <div class="card-premium text-center">
+            <small>Saldo</small>
+            <div class="valor-grande {% if saldo >= 0 %}text-success{% else %}text-danger{% endif %}">
+                {{ saldo | brl }}
             </div>
         </div>
     </div>
 
-    <!-- META -->
-    <div class="card-premium">
-        <h6>Meta de Economia</h6>
-        <form method="POST">
-            <input type="hidden" name="tipo" value="meta">
-            <input type="range" min="0" max="20000" step="100"
-                   name="meta"
-                   value="{{ meta or 0 }}"
-                   class="form-range"
-                   oninput="metaValor.innerText = this.value">
-            <div class="d-flex justify-content-between">
-                <small>0</small>
-                <strong>R$ <span id="metaValor">{{ meta or 0 }}</span></strong>
-                <small>20.000</small>
-            </div>
-            <button class="btn btn-gold w-100 mt-2">Salvar Meta</button>
-        </form>
-
-        <div class="mt-3">
-            <div class="progress">
-                <div class="progress-bar bg-warning"
-                     style="width: {{ progresso or 0 }}%">
-                </div>
-            </div>
-            <small>{{ (progresso or 0)|round(1) }}% concluído</small>
+    <div class="col-md-4">
+        <div class="card-premium text-center">
+            <small>Patrimônio</small>
+            <div class="valor-grande text-info">{{ patrimonio | brl }}</div>
         </div>
     </div>
+</div>
 
-    <!-- ADICIONAR GASTO -->
-    <div class="card-premium">
-        <h6>Adicionar Gasto</h6>
-        <form method="POST">
-            <input type="hidden" name="tipo" value="gasto">
-            <input type="text" name="descricao" class="form-control mb-2" placeholder="Descrição" required>
-            <input type="number" step="0.01" name="valor" class="form-control mb-2" placeholder="Valor" required>
-            <select name="categoria" class="form-select mb-2" required>
-                <option>Alimentação</option>
-                <option>Transporte</option>
-                <option>Lazer</option>
-                <option>Fixo</option>
-                <option>Outros</option>
-            </select>
-            <button class="btn btn-gold w-100">Adicionar</button>
-        </form>
-    </div>
+<!-- META -->
+<div class="card-premium">
+    <h6 class="mb-3">Meta de Economia</h6>
 
-    <!-- PRIORIDADES -->
-    <div class="card-premium">
-        <h6>Contas Prioritárias</h6>
-        {% if prioridades %}
-            {% for p in prioridades %}
-                <div class="d-flex justify-content-between item-linha">
-                    <span>{{ p.nome }}</span>
-                    <span class="text-danger">{{ p.valor | brl }}</span>
-                </div>
-            {% endfor %}
-        {% else %}
-            <small>Nenhuma prioridade cadastrada.</small>
-        {% endif %}
-    </div>
+    <form method="POST">
+        <input type="hidden" name="tipo" value="meta">
 
-    <!-- GRÁFICO CATEGORIA -->
-    <div class="card-premium">
-        <h6 class="text-center mb-3">Distribuição de Gastos</h6>
-        <canvas id="graficoCategoria"></canvas>
-    </div>
+        <input type="range"
+               min="0"
+               max="20000"
+               step="100"
+               name="meta"
+               value="{{ meta or 0 }}"
+               class="form-range"
+               oninput="metaValor.innerText = this.value">
 
-    <!-- GRÁFICO MENSAL -->
-    <div class="card-premium">
-        <h6 class="text-center mb-3">Evolução Mensal</h6>
-        <canvas id="graficoMensal"></canvas>
+        <div class="d-flex justify-content-between mt-2">
+            <small>0</small>
+            <strong class="text-warning">R$ <span id="metaValor">{{ meta or 0 }}</span></strong>
+            <small>20.000</small>
+        </div>
+
+        <button class="btn btn-gold w-100 mt-3">Salvar Meta</button>
+    </form>
+
+    <div class="mt-4">
+        <div class="progress">
+            <div class="progress-bar" style="width: {{ progresso or 0 }}%"></div>
+        </div>
+        <small class="text-muted">{{ (progresso or 0)|round(1) }}% concluído</small>
     </div>
+</div>
+
+<!-- ADICIONAR GASTO -->
+<div class="card-premium">
+    <h6 class="mb-3">Adicionar Gasto</h6>
+
+    <form method="POST">
+        <input type="hidden" name="tipo" value="gasto">
+
+        <input type="text" name="descricao" class="form-control mb-2" placeholder="Descrição" required>
+        <input type="number" step="0.01" name="valor" class="form-control mb-2" placeholder="Valor" required>
+
+        <select name="categoria" class="form-select mb-2" required>
+            <option>Alimentação</option>
+            <option>Transporte</option>
+            <option>Lazer</option>
+            <option>Fixo</option>
+            <option>Outros</option>
+        </select>
+
+        <button class="btn btn-gold w-100">Adicionar</button>
+    </form>
+</div>
+
+<!-- PRIORIDADES -->
+<div class="card-premium">
+    <h6 class="mb-3">Contas Prioritárias</h6>
+
+    {% if prioridades %}
+        {% for p in prioridades %}
+            <div class="d-flex justify-content-between item-linha">
+                <span>{{ p.nome }}</span>
+                <span class="text-danger">{{ p.valor | brl }}</span>
+            </div>
+        {% endfor %}
+    {% else %}
+        <small class="text-muted">Nenhuma prioridade cadastrada.</small>
+    {% endif %}
+</div>
+
+<!-- GRÁFICOS -->
+<div class="card-premium">
+    <h6 class="text-center mb-3">Distribuição de Gastos</h6>
+    <canvas id="graficoCategoria"></canvas>
+</div>
+
+<div class="card-premium">
+    <h6 class="text-center mb-3">Evolução Mensal</h6>
+    <canvas id="graficoMensal"></canvas>
+</div>
 
 </div>
 
 <script>
-if ("serviceWorker" in navigator") {
-    navigator.serviceWorker.register("/static/sw.js");
-}
-
 const dados = {{ resumo_categoria | default([]) | tojson }};
 if (dados.length > 0) {
-    const categorias = dados.map(item => item[0]);
-    const valores = dados.map(item => item[1]);
-
     new Chart(document.getElementById("graficoCategoria"), {
         type: "doughnut",
         data: {
-            labels: categorias,
+            labels: dados.map(d => d[0]),
             datasets: [{
-                data: valores,
-                backgroundColor: ["#2ecc71","#3498db","#9b59b6","#e74c3c","#f39c12"]
+                data: dados.map(d => d[1]),
+                backgroundColor: ["#2ecc71","#3498db","#9b59b6","#e74c3c","#f39c12"],
+                borderWidth: 0
             }]
         },
-        options: {
-            plugins: {
-                tooltip: { enabled: false },
-                legend: { labels: { color: "#ccc" } }
-            }
-        }
+        options: { plugins: { tooltip: { enabled: false } } }
     });
 }
 
-const dadosMensal = {{ evolucao_mensal | default([]) | tojson }};
-if (dadosMensal.length > 0) {
-    const meses = dadosMensal.map(item => item[0]);
-    const valores = dadosMensal.map(item => item[1]);
-
+const mensal = {{ evolucao_mensal | default([]) | tojson }};
+if (mensal.length > 0) {
     new Chart(document.getElementById("graficoMensal"), {
         type: "line",
         data: {
-            labels: meses,
+            labels: mensal.map(d => d[0]),
             datasets: [{
-                label: "Gastos",
-                data: valores,
+                data: mensal.map(d => d[1]),
                 borderColor: "#d4af37",
                 tension: 0.4
             }]
-        },
-        options: {
-            plugins: { legend: { labels: { color: "#ccc" } } },
-            scales: {
-                x: { ticks: { color: "#ccc" } },
-                y: { ticks: { color: "#ccc" } }
-            }
         }
     });
 }
