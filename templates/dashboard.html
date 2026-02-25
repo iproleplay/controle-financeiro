@@ -46,10 +46,6 @@ body {
 .progress {
     background-color: #1b1b22;
 }
-
-canvas {
-    max-width: 100%;
-}
 </style>
 </head>
 
@@ -60,23 +56,8 @@ canvas {
 <!-- HEADER -->
 <div class="card-premium mb-4">
     <div class="d-flex justify-content-between align-items-center">
-        <div>
-            <h5 class="mb-0">Olá, {{ nome }}</h5>
-            <small class="text-muted">
-                {% if session.role == 'admin' %}
-                    Conta Administrador
-                {% else %}
-                    Conta Padrão
-                {% endif %}
-            </small>
-        </div>
-
-        <div>
-            {% if session.role == 'admin' %}
-            <a href="/admin" class="btn btn-outline-warning btn-sm">Admin</a>
-            {% endif %}
-            <a href="/logout" class="btn btn-outline-light btn-sm">Sair</a>
-        </div>
+        <h5 class="mb-0">Olá, {{ nome }}</h5>
+        <a href="/logout" class="btn btn-outline-light btn-sm">Sair</a>
     </div>
 </div>
 
@@ -111,65 +92,67 @@ canvas {
 
 </div>
 
-<!-- GRÁFICOS -->
-<div class="row mb-4">
+<!-- FORMULÁRIOS -->
+<div class="row">
 
-    <div class="col-md-6">
-        <div class="card-premium text-center">
-            <h6>Distribuição de Gastos</h6>
-            <canvas id="graficoCategoria"></canvas>
+    <!-- GASTO -->
+    <div class="col-md-4">
+        <div class="card-premium">
+            <h6>Adicionar Gasto</h6>
+            <form method="POST">
+                <input type="hidden" name="tipo" value="gasto">
+                <input type="text" name="descricao" class="form-control mb-2" placeholder="Descrição" required>
+                <input type="number" step="0.01" name="valor" class="form-control mb-2" placeholder="Valor" required>
+                <select name="categoria" class="form-select mb-2">
+                    <option>Alimentação</option>
+                    <option>Transporte</option>
+                    <option>Lazer</option>
+                    <option>Fixo</option>
+                    <option>Outros</option>
+                </select>
+                <button class="btn btn-gold w-100">Salvar</button>
+            </form>
         </div>
     </div>
 
-    <div class="col-md-6">
-        <div class="card-premium text-center">
-            <h6>Evolução Mensal</h6>
-            <canvas id="graficoEvolucao"></canvas>
+    <!-- PRIORIDADE -->
+    <div class="col-md-4">
+        <div class="card-premium">
+            <h6>Conta Prioritária</h6>
+            <form method="POST">
+                <input type="hidden" name="tipo" value="prioridade">
+                <input type="text" name="nome" class="form-control mb-2" placeholder="Nome da conta" required>
+                <input type="number" step="0.01" name="valor" class="form-control mb-2" placeholder="Valor" required>
+                <button class="btn btn-gold w-100">Adicionar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- META -->
+    <div class="col-md-4">
+        <div class="card-premium">
+            <h6>Definir Meta</h6>
+            <form method="POST">
+                <input type="hidden" name="tipo" value="meta">
+                <input type="number" step="0.01" name="meta" class="form-control mb-2" placeholder="Valor da meta" required>
+                <button class="btn btn-gold w-100">Atualizar</button>
+            </form>
         </div>
     </div>
 
 </div>
 
-<!-- HISTÓRICO -->
-<div class="card-premium mt-4">
-    <h6 class="mb-3">Histórico Mensal</h6>
-
-    <select id="filtroMes" class="form-select mb-3">
-        <option value="todos">Todos os meses</option>
-        {% for mes in historico.keys() %}
-        <option value="{{ mes }}">{{ mes }}</option>
-        {% endfor %}
-    </select>
-
-    {% for mes, dados in historico.items() %}
-    <div class="mes-bloco mb-3" data-mes="{{ mes }}">
-        <div class="d-flex justify-content-between align-items-center"
-             style="cursor:pointer"
-             onclick="toggleMes('{{ mes }}')">
-
-            <strong>{{ mes }}</strong>
-            <span class="text-warning">
-                Total: {{ dados.total | brl }}
-            </span>
-        </div>
-
-        <div id="conteudo-{{ mes }}" class="mt-2" style="display:none;">
-            {% for gasto in dados.gastos %}
-            <div class="d-flex justify-content-between small py-1 border-bottom border-dark">
-                <span>{{ gasto.descricao }}</span>
-                <span class="text-danger">{{ gasto.valor | brl }}</span>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-    {% endfor %}
+<!-- GRÁFICO -->
+<div class="card-premium mt-4 text-center">
+    <h6>Distribuição de Gastos</h6>
+    <canvas id="graficoCategoria"></canvas>
 </div>
 
 </div>
 
 <script>
-// Donut Categorias
 const dados = {{ resumo_categoria | tojson }};
+
 if (dados.length > 0) {
     new Chart(document.getElementById("graficoCategoria"), {
         type: "doughnut",
@@ -189,47 +172,6 @@ if (dados.length > 0) {
         }
     });
 }
-
-// Linha Evolução
-const evolucao = {{ evolucao_mensal | tojson }};
-if (evolucao.length > 0) {
-    new Chart(document.getElementById("graficoEvolucao"), {
-        type: "line",
-        data: {
-            labels: evolucao.map(item => item[0]),
-            datasets: [{
-                label: "Gastos Mensais",
-                data: evolucao.map(item => item[1]),
-                borderColor: "#f4d03f",
-                backgroundColor: "rgba(244,208,63,0.2)",
-                fill: true,
-                tension: 0.4
-            }]
-        },
-        options: {
-            plugins: {
-                legend: { labels: { color: "#ccc" } }
-            },
-            scales: {
-                x: { ticks: { color: "#ccc" } },
-                y: { ticks: { color: "#ccc" } }
-            }
-        }
-    });
-}
-
-// Histórico
-function toggleMes(mes) {
-    const el = document.getElementById("conteudo-" + mes);
-    el.style.display = el.style.display === "none" ? "block" : "none";
-}
-
-document.getElementById("filtroMes").addEventListener("change", function() {
-    const valor = this.value;
-    document.querySelectorAll(".mes-bloco").forEach(bloco => {
-        bloco.style.display = (valor === "todos" || bloco.dataset.mes === valor) ? "block" : "none";
-    });
-});
 </script>
 
 </body>
