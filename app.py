@@ -159,12 +159,7 @@ def dashboard():
     )
 
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect("/")
-
-
+# ================= CRIAR COLUNA AUTOMÁTICO =================
 @app.route("/criar_coluna")
 def criar_coluna():
     conn = get_connection()
@@ -173,3 +168,15 @@ def criar_coluna():
     conn.commit()
     conn.close()
     return "Coluna criada com sucesso!"
+
+
+# ================= TESTE =================
+@app.route("/teste")
+def teste():
+    return "Servidor funcionando!"
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/")
