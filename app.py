@@ -6,17 +6,13 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "segredo_super_forte")
+app.secret_key = os.environ.get("SECRET_KEY")
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-
-# ================= CONEXÃO =================
 def get_connection():
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
-
-# ================= FILTRO BRL =================
 @app.template_filter("brl")
 def brl(valor):
     try:
@@ -24,8 +20,6 @@ def brl(valor):
     except:
         return "R$ 0,00"
 
-
-# ================= LOGIN =================
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -47,34 +41,6 @@ def login():
 
     return render_template("login.html")
 
-
-# ================= CADASTRO =================
-@app.route("/cadastro", methods=["GET", "POST"])
-def cadastro():
-    if request.method == "POST":
-        nome = request.form["nome"]
-        email = request.form["email"]
-        senha = generate_password_hash(request.form["senha"])
-
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        try:
-            cursor.execute(
-                "INSERT INTO usuarios (nome, email, senha) VALUES (%s, %s, %s)",
-                (nome, email, senha)
-            )
-            conn.commit()
-            conn.close()
-            return redirect("/")
-        except:
-            conn.close()
-            return "Email já cadastrado"
-
-    return render_template("cadastro.html")
-
-
-# ================= DASHBOARD =================
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
 
@@ -85,67 +51,83 @@ def dashboard():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # ===== SALVAR RENDA =====
+    # FILTROS
+    mes_filtro = request.args.get("mes")
+    categoria_filtro = request.args.get("categoria")
+
+    filtro_sql = "WHERE usuario_id=%s"
+    params = [usuario_id]
+
+    if mes_filtro:
+        filtro_sql += " AND EXTRACT(MONTH FROM data)=%s"
+        params.append(mes_filtro)
+
+    if categoria_filtro:
+        filtro_sql += " AND categoria=%s"
+        params.append(categoria_filtro)
+
+    # SALVAR RENDA
     if request.method == "POST" and request.form.get("tipo") == "renda":
         renda = request.form.get("renda")
-        if renda:
-            cursor.execute("""
-                UPDATE usuarios
-                SET renda_mensal=%s
-                WHERE id=%s
-            """, (float(renda), usuario_id))
-            conn.commit()
+        cursor.execute("UPDATE usuarios SET renda_mensal=%s WHERE id=%s",
+                       (float(renda), usuario_id))
+        conn.commit()
 
-    # ===== SALVAR GASTO =====
+    # SALVAR GASTO
     if request.method == "POST" and request.form.get("tipo") == "gasto":
-        descricao = request.form.get("descricao")
-        valor = request.form.get("valor")
-        categoria = request.form.get("categoria")
+        cursor.execute("""
+            INSERT INTO gastos (usuario_id, descricao, valor, categoria, data)
+            VALUES (%s,%s,%s,%s,%s)
+        """, (
+            usuario_id,
+            request.form["descricao"],
+            float(request.form["valor"]),
+            request.form["categoria"],
+            datetime.now().date()
+        ))
+        conn.commit()
 
-        if descricao and valor and categoria:
-            cursor.execute("""
-                INSERT INTO gastos (usuario_id, descricao, valor, categoria, data)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (usuario_id, descricao, float(valor), categoria, datetime.now().date()))
-            conn.commit()
+    # EXCLUIR
+    if request.args.get("excluir"):
+        cursor.execute("DELETE FROM gastos WHERE id=%s AND usuario_id=%s",
+                       (request.args.get("excluir"), usuario_id))
+        conn.commit()
+        return redirect("/dashboard")
 
-    # ===== PEGAR RENDA =====
+    # RENDA
     cursor.execute("SELECT renda_mensal FROM usuarios WHERE id=%s", (usuario_id,))
     renda_mensal = float(cursor.fetchone()["renda_mensal"] or 0)
 
-    # ===== TOTAL GASTOS =====
-    cursor.execute("SELECT SUM(valor) AS total FROM gastos WHERE usuario_id=%s", (usuario_id,))
-    total_gastos = float(cursor.fetchone()["total"] or 0)
+    # GASTOS
+    cursor.execute(f"SELECT * FROM gastos {filtro_sql} ORDER BY data DESC", params)
+    gastos = cursor.fetchall()
 
+    total_gastos = sum([float(g["valor"]) for g in gastos])
     saldo = renda_mensal - total_gastos
+    percentual = (total_gastos / renda_mensal * 100) if renda_mensal > 0 else 0
 
-    # ===== RESUMO POR CATEGORIA =====
-    cursor.execute("""
-        SELECT categoria, SUM(valor) AS total
-        FROM gastos
-        WHERE usuario_id=%s
+    # RESUMO CATEGORIA
+    cursor.execute(f"""
+        SELECT categoria, SUM(valor) as total
+        FROM gastos {filtro_sql}
         GROUP BY categoria
-    """, (usuario_id,))
+    """, params)
+    resumo_categoria = [(r["categoria"], float(r["total"])) for r in cursor.fetchall()]
 
-    resumo_categoria = [(row["categoria"], float(row["total"])) for row in cursor.fetchall()]
-
-    # ===== EVOLUÇÃO MENSAL =====
+    # EVOLUÇÃO MENSAL
     cursor.execute("""
-        SELECT DATE_TRUNC('month', data) AS mes,
-               SUM(valor) AS total
+        SELECT DATE_TRUNC('month', data) as mes, SUM(valor) as total
         FROM gastos
         WHERE usuario_id=%s
         GROUP BY mes
         ORDER BY mes
     """, (usuario_id,))
-
     evolucao_mensal = []
     meses_pt = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
-
     for row in cursor.fetchall():
-        data_mes = row["mes"]
-        nome_mes = f"{meses_pt[data_mes.month - 1]}/{data_mes.year}"
-        evolucao_mensal.append((nome_mes, float(row["total"])))
+        evolucao_mensal.append(
+            (f"{meses_pt[row['mes'].month-1]}/{row['mes'].year}", float(row["total"]))
+        )
 
     conn.close()
 
@@ -154,27 +136,11 @@ def dashboard():
         nome=session["nome"],
         renda_mensal=renda_mensal,
         saldo=saldo,
+        percentual=percentual,
+        gastos=gastos,
         resumo_categoria=resumo_categoria,
         evolucao_mensal=evolucao_mensal
     )
-
-
-# ================= CRIAR COLUNA AUTOMÁTICO =================
-@app.route("/criar_coluna")
-def criar_coluna():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS renda_mensal NUMERIC;")
-    conn.commit()
-    conn.close()
-    return "Coluna criada com sucesso!"
-
-
-# ================= TESTE =================
-@app.route("/teste")
-def teste():
-    return "Servidor funcionando!"
-
 
 @app.route("/logout")
 def logout():
