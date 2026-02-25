@@ -1,32 +1,38 @@
 from flask import Flask, render_template, request, redirect, session
-import sqlite3
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
-import os
 
 app = Flask(__name__)
 app.secret_key = "segredo_super_forte"
 
-# ================= CAMINHO DO BANCO =================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "financeiro.db")
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+
+# ================= CONEXÃO =================
+def get_connection():
+    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+
 
 # ================= FILTRO BRL =================
 @app.template_filter("brl")
 def brl(valor):
     try:
-        return "R$ {:,.2f}".format(valor).replace(",", "X").replace(".", ",").replace("X", ".")
+        return "R$ {:,.2f}".format(float(valor)).replace(",", "X").replace(".", ",").replace("X", ".")
     except:
         return "R$ 0,00"
 
-# ================= BANCO =================
-def criar_banco():
-    conn = sqlite3.connect(DB_PATH)
+
+# ================= CRIAR TABELAS =================
+def criar_tabelas():
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS usuarios (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         nome TEXT,
         email TEXT UNIQUE,
         senha TEXT
@@ -36,35 +42,60 @@ def criar_banco():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS configuracoes (
         usuario_id INTEGER PRIMARY KEY,
-        salario REAL,
-        meta REAL
+        salario NUMERIC,
+        meta NUMERIC
     )
     """)
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS gastos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         usuario_id INTEGER,
         descricao TEXT,
-        valor REAL,
+        valor NUMERIC,
         categoria TEXT,
-        data TEXT
+        data DATE
     )
     """)
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS prioridades (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         usuario_id INTEGER,
         nome TEXT,
-        valor REAL
+        valor NUMERIC
     )
     """)
 
     conn.commit()
     conn.close()
 
-criar_banco()
+
+criar_tabelas()
+
+
+# ================= LOGIN =================
+@app.route("/", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        email = request.form["email"]
+        senha = request.form["senha"]
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM usuarios WHERE email=%s", (email,))
+        user = cursor.fetchone()
+        conn.close()
+
+        if user and check_password_hash(user["senha"], senha):
+            session["usuario_id"] = user["id"]
+            session["nome"] = user["nome"]
+            return redirect("/dashboard")
+        else:
+            return "Login inválido"
+
+    return render_template("login.html")
+
 
 # ================= CADASTRO =================
 @app.route("/cadastro", methods=["GET", "POST"])
@@ -74,12 +105,12 @@ def cadastro():
         email = request.form["email"]
         senha = generate_password_hash(request.form["senha"])
 
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_connection()
         cursor = conn.cursor()
 
         try:
             cursor.execute(
-                "INSERT INTO usuarios (nome, email, senha) VALUES (?, ?, ?)",
+                "INSERT INTO usuarios (nome, email, senha) VALUES (%s, %s, %s)",
                 (nome, email, senha)
             )
             conn.commit()
@@ -91,27 +122,6 @@ def cadastro():
 
     return render_template("cadastro.html")
 
-# ================= LOGIN =================
-@app.route("/", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        email = request.form["email"]
-        senha = request.form["senha"]
-
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, nome, senha FROM usuarios WHERE email=?", (email,))
-        user = cursor.fetchone()
-        conn.close()
-
-        if user and check_password_hash(user[2], senha):
-            session["usuario_id"] = user[0]
-            session["nome"] = user[1]
-            return redirect("/dashboard")
-        else:
-            return "Login inválido"
-
-    return render_template("login.html")
 
 # ================= DASHBOARD =================
 @app.route("/dashboard", methods=["GET", "POST"])
@@ -121,14 +131,15 @@ def dashboard():
         return redirect("/")
 
     usuario_id = session["usuario_id"]
-    conn = sqlite3.connect(DB_PATH)
+
+    conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT salario, meta FROM configuracoes WHERE usuario_id=?", (usuario_id,))
+    cursor.execute("SELECT salario, meta FROM configuracoes WHERE usuario_id=%s", (usuario_id,))
     config = cursor.fetchone()
 
-    salario = config[0] if config and config[0] else 0
-    meta = config[1] if config and config[1] else 1000
+    salario = float(config["salario"]) if config and config["salario"] else 0
+    meta = float(config["meta"]) if config and config["meta"] else 1000
 
     if request.method == "POST":
         tipo = request.form.get("tipo")
@@ -137,9 +148,9 @@ def dashboard():
             meta = float(request.form["meta"])
             cursor.execute("""
             INSERT INTO configuracoes (usuario_id, salario, meta)
-            VALUES (?, ?, ?)
-            ON CONFLICT(usuario_id)
-            DO UPDATE SET meta=excluded.meta
+            VALUES (%s, %s, %s)
+            ON CONFLICT (usuario_id)
+            DO UPDATE SET meta=EXCLUDED.meta
             """, (usuario_id, salario, meta))
             conn.commit()
 
@@ -147,49 +158,31 @@ def dashboard():
             descricao = request.form["descricao"]
             valor = float(request.form["valor"])
             categoria = request.form["categoria"]
-            data_atual = datetime.now().strftime("%Y-%m-%d")
+            data_atual = datetime.now().date()
 
             cursor.execute("""
             INSERT INTO gastos (usuario_id, descricao, valor, categoria, data)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
             """, (usuario_id, descricao, valor, categoria, data_atual))
             conn.commit()
 
-    cursor.execute("SELECT SUM(valor) FROM gastos WHERE usuario_id=?", (usuario_id,))
-    total_gastos = cursor.fetchone()[0] or 0
+    cursor.execute("SELECT SUM(valor) AS total FROM gastos WHERE usuario_id=%s", (usuario_id,))
+    total_gastos = cursor.fetchone()["total"] or 0
 
-    cursor.execute("SELECT SUM(valor) FROM prioridades WHERE usuario_id=?", (usuario_id,))
-    total_prioridades = cursor.fetchone()[0] or 0
+    cursor.execute("SELECT SUM(valor) AS total FROM prioridades WHERE usuario_id=%s", (usuario_id,))
+    total_prioridades = cursor.fetchone()["total"] or 0
 
-    saldo = salario - total_gastos - total_prioridades
+    saldo = salario - float(total_gastos) - float(total_prioridades)
     progresso = min((saldo / meta) * 100, 100) if meta > 0 else 0
     falta = max(meta - saldo, 0)
-    patrimonio = saldo
 
     cursor.execute("""
-        SELECT categoria, SUM(valor)
+        SELECT categoria, SUM(valor) AS total
         FROM gastos
-        WHERE usuario_id=?
+        WHERE usuario_id=%s
         GROUP BY categoria
     """, (usuario_id,))
-    resumo_categoria = cursor.fetchall()
-
-    cursor.execute("""
-        SELECT strftime('%m', data), SUM(valor)
-        FROM gastos
-        WHERE usuario_id=?
-        GROUP BY strftime('%m', data)
-        ORDER BY strftime('%m', data)
-    """, (usuario_id,))
-    dados_mensais = cursor.fetchall()
-
-    meses_dict = {
-        "01": "Jan", "02": "Fev", "03": "Mar", "04": "Abr",
-        "05": "Mai", "06": "Jun", "07": "Jul", "08": "Ago",
-        "09": "Set", "10": "Out", "11": "Nov", "12": "Dez"
-    }
-
-    evolucao_mensal = [(meses_dict.get(m, m), v) for m, v in dados_mensais]
+    resumo_categoria = [(row["categoria"], float(row["total"])) for row in cursor.fetchall()]
 
     conn.close()
 
@@ -201,54 +194,12 @@ def dashboard():
         meta=meta,
         progresso=progresso,
         falta=falta,
-        patrimonio=patrimonio,
         resumo_categoria=resumo_categoria,
-        evolucao_mensal=evolucao_mensal,
         total_prioridades=total_prioridades
     )
 
-# ================= PRIORIDADES =================
-@app.route("/prioridades", methods=["GET", "POST"])
-def prioridades():
-
-    if "usuario_id" not in session:
-        return redirect("/")
-
-    usuario_id = session["usuario_id"]
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    if request.method == "POST":
-        nome = request.form["nome"]
-        valor = float(request.form["valor"])
-
-        cursor.execute("""
-        INSERT INTO prioridades (usuario_id, nome, valor)
-        VALUES (?, ?, ?)
-        """, (usuario_id, nome, valor))
-        conn.commit()
-
-    cursor.execute("""
-        SELECT id, nome, valor
-        FROM prioridades
-        WHERE usuario_id=?
-    """, (usuario_id,))
-
-    prioridades_lista = cursor.fetchall()
-    total_prioridades = sum(p[2] for p in prioridades_lista)
-
-    conn.close()
-
-    return render_template(
-        "prioridades.html",
-        nome=session["nome"],
-        prioridades=prioridades_lista,
-        total_prioridades=total_prioridades
-    )
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect("/")
-
-# IMPORTANTE: NÃO COLOCAR app.run() para produção com gunicorn
