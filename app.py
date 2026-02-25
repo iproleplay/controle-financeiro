@@ -28,15 +28,6 @@ def garantir_coluna_role():
     conn.close()
 
 
-# ================= FILTRO BRL =================
-@app.template_filter("brl")
-def brl(valor):
-    try:
-        return "R$ {:,.2f}".format(float(valor)).replace(",", "X").replace(".", ",").replace("X", ".")
-    except:
-        return "R$ 0,00"
-
-
 # ================= CRIAR TABELAS =================
 def criar_tabelas():
     conn = get_connection()
@@ -84,12 +75,21 @@ def criar_tabelas():
     conn.close()
 
 
-# Executa criação segura
+# Inicialização segura
 try:
     criar_tabelas()
     garantir_coluna_role()
 except Exception as e:
     print("Erro na inicialização:", e)
+
+
+# ================= FILTRO BRL =================
+@app.template_filter("brl")
+def brl(valor):
+    try:
+        return "R$ {:,.2f}".format(float(valor)).replace(",", "X").replace(".", ",").replace("X", ".")
+    except:
+        return "R$ 0,00"
 
 
 # ================= LOGIN =================
@@ -156,17 +156,7 @@ def dashboard():
     if request.method == "POST":
         tipo = request.form.get("tipo")
 
-        if tipo == "meta":
-            meta = float(request.form["meta"])
-            cursor.execute("""
-                INSERT INTO configuracoes (usuario_id, meta)
-                VALUES (%s, %s)
-                ON CONFLICT (usuario_id)
-                DO UPDATE SET meta=EXCLUDED.meta
-            """, (usuario_id, meta))
-            conn.commit()
-
-        elif tipo == "gasto":
+        if tipo == "gasto":
             descricao = request.form["descricao"]
             valor = float(request.form["valor"])
             categoria = request.form["categoria"]
@@ -188,6 +178,17 @@ def dashboard():
             """, (usuario_id, nome, valor))
             conn.commit()
 
+        elif tipo == "meta":
+            meta = float(request.form["meta"])
+
+            cursor.execute("""
+                INSERT INTO configuracoes (usuario_id, meta)
+                VALUES (%s, %s)
+                ON CONFLICT (usuario_id)
+                DO UPDATE SET meta=EXCLUDED.meta
+            """, (usuario_id, meta))
+            conn.commit()
+
     # CONFIG
     cursor.execute("SELECT salario, meta FROM configuracoes WHERE usuario_id=%s", (usuario_id,))
     config = cursor.fetchone()
@@ -196,33 +197,43 @@ def dashboard():
     meta = float(config["meta"]) if config and config["meta"] else 1000
 
     cursor.execute("SELECT SUM(valor) AS total FROM gastos WHERE usuario_id=%s", (usuario_id,))
-    total_gastos = cursor.fetchone()["total"] or 0
+    total_gastos = float(cursor.fetchone()["total"] or 0)
 
     cursor.execute("SELECT nome, valor FROM prioridades WHERE usuario_id=%s", (usuario_id,))
     prioridades = cursor.fetchall()
     total_prioridades = sum(float(p["valor"]) for p in prioridades) if prioridades else 0
 
-    saldo = salario - float(total_gastos) - total_prioridades
-    patrimonio = saldo
+    saldo = salario - total_gastos - total_prioridades
     progresso = min((saldo / meta) * 100, 100) if meta > 0 else 0
 
-    # HISTÓRICO
+    # ================= HISTÓRICO ORGANIZADO =================
     cursor.execute("""
-        SELECT TO_CHAR(data, 'Month YYYY') AS mes,
-               descricao,
-               valor
+        SELECT data, descricao, valor
         FROM gastos
         WHERE usuario_id=%s
         ORDER BY data DESC
     """, (usuario_id,))
-    historico_rows = cursor.fetchall()
 
+    historico_rows = cursor.fetchall()
     historico = {}
+
+    meses_pt = [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ]
+
     for row in historico_rows:
-        mes = row["mes"].strip()
-        if mes not in historico:
-            historico[mes] = []
-        historico[mes].append(row)
+        data = row["data"]
+        mes_nome = meses_pt[data.month - 1]
+        chave_mes = f"{mes_nome} {data.year}"
+
+        if chave_mes not in historico:
+            historico[chave_mes] = []
+
+        historico[chave_mes].append({
+            "descricao": row["descricao"],
+            "valor": float(row["valor"])
+        })
 
     # RESUMO CATEGORIA
     cursor.execute("""
@@ -233,17 +244,6 @@ def dashboard():
     """, (usuario_id,))
     resumo_categoria = [(r["categoria"], float(r["total"])) for r in cursor.fetchall()]
 
-    # EVOLUÇÃO
-    cursor.execute("""
-        SELECT TO_CHAR(data, 'Mon') AS mes,
-               SUM(valor) AS total
-        FROM gastos
-        WHERE usuario_id=%s
-        GROUP BY mes
-        ORDER BY mes
-    """, (usuario_id,))
-    evolucao_mensal = [(r["mes"], float(r["total"])) for r in cursor.fetchall()]
-
     conn.close()
 
     return render_template(
@@ -251,13 +251,11 @@ def dashboard():
         nome=session["nome"],
         salario=salario,
         saldo=saldo,
-        patrimonio=patrimonio,
         meta=meta,
         progresso=progresso,
         prioridades=prioridades,
         historico=historico,
-        resumo_categoria=resumo_categoria,
-        evolucao_mensal=evolucao_mensal
+        resumo_categoria=resumo_categoria
     )
 
 
