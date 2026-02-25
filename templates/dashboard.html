@@ -8,12 +8,43 @@
 <style>
 body{background:#0f172a;color:white;font-family:Arial;margin:0;padding:20px;}
 h1{text-align:center;margin-bottom:10px;}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:25px;}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:25px;margin-top:20px;}
+
 .card{background:#1e293b;padding:20px;border-radius:12px;box-shadow:0 0 15px rgba(0,0,0,0.4);}
-input,select,button{padding:8px;border-radius:6px;border:none;margin:5px 0;}
+
+input,select,button{
+    padding:8px;border-radius:6px;border:none;margin:5px 0;
+}
+
 button{background:#3b82f6;color:white;cursor:pointer;}
-.resumo-topo{display:flex;justify-content:space-around;margin-bottom:25px;}
-.resumo-box{background:#1e293b;padding:15px;border-radius:10px;width:30%;text-align:center;}
+
+.resumo-topo{display:flex;justify-content:space-around;margin-bottom:20px;}
+.resumo-box{background:#1e293b;padding:15px;border-radius:10px;width:23%;text-align:center;}
+
+.progress{
+    background:#334155;
+    border-radius:10px;
+    height:20px;
+    overflow:hidden;
+}
+.progress-bar{
+    height:100%;
+    background:#22c55e;
+}
+
+.gasto-item{
+    background:#334155;
+    padding:10px;
+    border-radius:8px;
+    margin-bottom:8px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.red{color:#ef4444;}
+.green{color:#22c55e;}
 canvas{max-height:320px;}
 </style>
 </head>
@@ -21,24 +52,18 @@ canvas{max-height:320px;}
 
 <h1>📊 Dashboard Financeiro</h1>
 
-<div class="card" style="margin-bottom:25px;">
-<h3>💰 Definir Renda Mensal</h3>
-<form method="POST">
-<input type="hidden" name="tipo" value="renda">
-<input type="number" step="0.01" name="renda" placeholder="Digite sua renda mensal" required>
-<button type="submit">Salvar</button>
-</form>
-<p>Renda Atual: {{ renda_mensal | brl }}</p>
-</div>
+<!-- FILTROS -->
+<div class="card">
+<form method="GET">
+<select name="mes">
+<option value="">Todos os meses</option>
+{% for i in range(1,13) %}
+<option value="{{i}}">Mês {{i}}</option>
+{% endfor %}
+</select>
 
-<div class="card" style="margin-bottom:25px;">
-<h3>➕ Adicionar Gasto</h3>
-<form method="POST">
-<input type="hidden" name="tipo" value="gasto">
-<input type="text" name="descricao" placeholder="Descrição" required>
-<input type="number" step="0.01" name="valor" placeholder="Valor" required>
-<select name="categoria" required>
-<option value="">Selecione</option>
+<select name="categoria">
+<option value="">Todas categorias</option>
 <option>Aluguel</option>
 <option>Energia</option>
 <option>Internet</option>
@@ -46,26 +71,76 @@ canvas{max-height:320px;}
 <option>Mercado</option>
 <option>Outros</option>
 </select>
-<button type="submit">Adicionar</button>
+
+<button type="submit">Filtrar</button>
 </form>
 </div>
 
+<!-- RESUMO -->
 <div class="resumo-topo">
+
 <div class="resumo-box">
 <h4>Renda</h4>
 <p>{{ renda_mensal | brl }}</p>
 </div>
+
 <div class="resumo-box">
-<h4>Total Gastos</h4>
+<h4>Gastos</h4>
 <p>{{ (renda_mensal - saldo) | brl }}</p>
 </div>
+
 <div class="resumo-box">
 <h4>Saldo</h4>
-<p>{{ saldo | brl }}</p>
+<p class="{{ 'red' if saldo < 0 else 'green' }}">
+{{ saldo | brl }}
+</p>
+</div>
+
+<div class="resumo-box">
+<h4>% Comprometido</h4>
+<p>{{ "%.1f"|format(percentual) }}%</p>
+<div class="progress">
+<div class="progress-bar" style="width: {{ percentual }}%; background: {{ '#ef4444' if percentual>100 else '#22c55e' }}"></div>
 </div>
 </div>
 
+</div>
+
+<!-- FORMULARIOS -->
 <div class="grid">
+
+<div class="card">
+<h3>💰 Definir Renda</h3>
+<form method="POST">
+<input type="hidden" name="tipo" value="renda">
+<input type="number" step="0.01" name="renda" required>
+<button>Salvar</button>
+</form>
+</div>
+
+<div class="card">
+<h3>➕ Adicionar Gasto</h3>
+<form method="POST">
+<input type="hidden" name="tipo" value="gasto">
+<input type="text" name="descricao" placeholder="Descrição" required>
+<input type="number" step="0.01" name="valor" placeholder="Valor" required>
+<select name="categoria" required>
+<option>Aluguel</option>
+<option>Energia</option>
+<option>Internet</option>
+<option>Cartão</option>
+<option>Mercado</option>
+<option>Outros</option>
+</select>
+<button>Adicionar</button>
+</form>
+</div>
+
+</div>
+
+<!-- GRAFICOS -->
+<div class="grid">
+
 <div class="card">
 <h3>🎯 Gastos por Categoria</h3>
 <canvas id="graficoCategoria"></canvas>
@@ -75,6 +150,27 @@ canvas{max-height:320px;}
 <h3>📈 Evolução Mensal</h3>
 <canvas id="graficoMensal"></canvas>
 </div>
+
+</div>
+
+<!-- LISTA DE GASTOS -->
+<div class="card" style="margin-top:20px;">
+<h3>🧾 Lista de Gastos</h3>
+
+{% for g in gastos %}
+<div class="gasto-item">
+<div>
+<strong>{{ g.descricao }}</strong><br>
+<small>{{ g.categoria }} - {{ g.data }}</small>
+</div>
+
+<div>
+<span>{{ g.valor | brl }}</span>
+<a href="/dashboard?excluir={{g.id}}" style="color:#ef4444; margin-left:10px;">Excluir</a>
+</div>
+</div>
+{% endfor %}
+
 </div>
 
 <script>
@@ -92,8 +188,7 @@ backgroundColor:["#ef4444","#3b82f6","#facc15","#22c55e","#a855f7","#f97316"]
 },
 options:{
 plugins:{
-legend:{position:"bottom",labels:{color:"white"}},
-tooltip:{callbacks:{label:(c)=>c.label+": R$ "+c.parsed.toFixed(2)}}
+legend:{position:"bottom",labels:{color:"white"}}
 }
 }
 });
