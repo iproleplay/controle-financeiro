@@ -35,7 +35,8 @@ def criar_tabelas():
         id SERIAL PRIMARY KEY,
         nome TEXT,
         email TEXT UNIQUE,
-        senha TEXT
+        senha TEXT,
+        role TEXT DEFAULT 'user'
     )
     """)
 
@@ -90,6 +91,7 @@ def login():
         if user and check_password_hash(user["senha"], senha):
             session["usuario_id"] = user["id"]
             session["nome"] = user["nome"]
+            session["role"] = user["role"]
             return redirect("/dashboard")
         else:
             return "Login inválido"
@@ -134,7 +136,6 @@ def dashboard():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # ===== POST =====
     if request.method == "POST":
         tipo = request.form.get("tipo")
 
@@ -170,14 +171,13 @@ def dashboard():
             """, (usuario_id, nome, valor))
             conn.commit()
 
-    # ===== CONFIG =====
+    # CONFIG
     cursor.execute("SELECT salario, meta FROM configuracoes WHERE usuario_id=%s", (usuario_id,))
     config = cursor.fetchone()
 
     salario = float(config["salario"]) if config and config["salario"] else 0
     meta = float(config["meta"]) if config and config["meta"] else 1000
 
-    # ===== TOTAIS =====
     cursor.execute("SELECT SUM(valor) AS total FROM gastos WHERE usuario_id=%s", (usuario_id,))
     total_gastos = cursor.fetchone()["total"] or 0
 
@@ -189,7 +189,7 @@ def dashboard():
     patrimonio = saldo
     progresso = min((saldo / meta) * 100, 100) if meta > 0 else 0
 
-    # ===== HISTÓRICO POR MÊS =====
+    # HISTÓRICO
     cursor.execute("""
         SELECT TO_CHAR(data, 'Month YYYY') AS mes,
                descricao,
@@ -198,17 +198,16 @@ def dashboard():
         WHERE usuario_id=%s
         ORDER BY data DESC
     """, (usuario_id,))
-
     historico_rows = cursor.fetchall()
-    historico = {}
 
+    historico = {}
     for row in historico_rows:
         mes = row["mes"].strip()
         if mes not in historico:
             historico[mes] = []
         historico[mes].append(row)
 
-    # ===== RESUMO CATEGORIA =====
+    # RESUMO CATEGORIA
     cursor.execute("""
         SELECT categoria, SUM(valor) AS total
         FROM gastos
@@ -217,7 +216,7 @@ def dashboard():
     """, (usuario_id,))
     resumo_categoria = [(r["categoria"], float(r["total"])) for r in cursor.fetchall()]
 
-    # ===== EVOLUÇÃO MENSAL =====
+    # EVOLUÇÃO
     cursor.execute("""
         SELECT TO_CHAR(data, 'Mon') AS mes,
                SUM(valor) AS total
@@ -245,33 +244,31 @@ def dashboard():
     )
 
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect("/")
-
+# ================= ADMIN =================
 @app.route("/admin")
 def admin():
+    if "usuario_id" not in session:
+        return redirect("/")
 
-    # proteção simples (você pode melhorar depois)
-    if session.get("nome") != "Admin":
-        return "Acesso negado"
+    if session.get("role") != "admin":
+        return "Acesso restrito ao administrador"
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id, nome, email FROM usuarios ORDER BY id DESC")
+    cursor.execute("SELECT id, nome, email, role FROM usuarios ORDER BY id DESC")
     usuarios = cursor.fetchall()
 
     conn.close()
 
     return render_template("admin.html", usuarios=usuarios)
 
+
 @app.route("/admin/editar/<int:user_id>", methods=["GET", "POST"])
 def editar_usuario(user_id):
 
-    if "usuario_id" not in session:
-        return redirect("/")
+    if session.get("role") != "admin":
+        return "Acesso restrito"
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -280,37 +277,39 @@ def editar_usuario(user_id):
         nome = request.form["nome"]
         email = request.form["email"]
         senha = request.form.get("senha")
+        role = request.form["role"]
 
         if senha:
             senha_hash = generate_password_hash(senha)
             cursor.execute("""
                 UPDATE usuarios
-                SET nome=%s, email=%s, senha=%s
+                SET nome=%s, email=%s, senha=%s, role=%s
                 WHERE id=%s
-            """, (nome, email, senha_hash, user_id))
+            """, (nome, email, senha_hash, role, user_id))
         else:
             cursor.execute("""
                 UPDATE usuarios
-                SET nome=%s, email=%s
+                SET nome=%s, email=%s, role=%s
                 WHERE id=%s
-            """, (nome, email, user_id))
+            """, (nome, email, role, user_id))
 
         conn.commit()
         conn.close()
         return redirect("/admin")
 
-    cursor.execute("SELECT id, nome, email FROM usuarios WHERE id=%s", (user_id,))
+    cursor.execute("SELECT id, nome, email, role FROM usuarios WHERE id=%s", (user_id,))
     usuario = cursor.fetchone()
 
     conn.close()
 
     return render_template("editar_usuario.html", usuario=usuario)
 
+
 @app.route("/admin/excluir/<int:user_id>")
 def excluir_usuario(user_id):
 
-    if "usuario_id" not in session:
-        return redirect("/")
+    if session.get("role") != "admin":
+        return "Acesso restrito"
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -320,3 +319,9 @@ def excluir_usuario(user_id):
     conn.close()
 
     return redirect("/admin")
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/")
