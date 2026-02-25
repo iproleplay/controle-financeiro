@@ -249,3 +249,20 @@ def dashboard():
 def logout():
     session.clear()
     return redirect("/")
+
+@app.route("/admin")
+def admin():
+
+    # proteção simples (você pode melhorar depois)
+    if session.get("nome") != "Admin":
+        return "Acesso negado"
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, nome, email FROM usuarios ORDER BY id DESC")
+    usuarios = cursor.fetchall()
+
+    conn.close()
+
+    return render_template("admin.html", usuarios=usuarios)
