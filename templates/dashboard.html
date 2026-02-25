@@ -36,7 +36,7 @@ body {
     height: 12px;
 }
 
-.gasto-item {
+.item-linha {
     border-bottom: 1px solid #2a2a33;
     padding: 8px 0;
 }
@@ -52,7 +52,7 @@ body {
         <a href="/logout" class="btn btn-outline-light btn-sm">Sair</a>
     </div>
 
-    <!-- RESUMO FINANCEIRO -->
+    <!-- RESUMO -->
     <div class="row">
         <div class="col-md-4">
             <div class="card-premium text-center">
@@ -62,7 +62,7 @@ body {
         </div>
         <div class="col-md-4">
             <div class="card-premium text-center">
-                <small>Saldo Atual</small>
+                <small>Saldo</small>
                 <h5 class="{% if saldo >= 0 %}text-success{% else %}text-danger{% endif %}">
                     {{ saldo | brl }}
                 </h5>
@@ -81,13 +81,14 @@ body {
         <h6>Meta de Economia</h6>
         <form method="POST">
             <input type="hidden" name="tipo" value="meta">
-            <input type="range" min="0" max="20000" step="100" name="meta"
-                   value="{{ meta }}"
+            <input type="range" min="0" max="20000" step="100"
+                   name="meta"
+                   value="{{ meta or 0 }}"
                    class="form-range"
                    oninput="metaValor.innerText = this.value">
             <div class="d-flex justify-content-between">
                 <small>0</small>
-                <strong>R$ <span id="metaValor">{{ meta }}</span></strong>
+                <strong>R$ <span id="metaValor">{{ meta or 0 }}</span></strong>
                 <small>20.000</small>
             </div>
             <button class="btn btn-gold w-100 mt-2">Salvar Meta</button>
@@ -96,10 +97,10 @@ body {
         <div class="mt-3">
             <div class="progress">
                 <div class="progress-bar bg-warning"
-                     style="width: {{ progresso }}%">
+                     style="width: {{ progresso or 0 }}%">
                 </div>
             </div>
-            <small>{{ progresso|round(1) }}% concluído</small>
+            <small>{{ (progresso or 0)|round(1) }}% concluído</small>
         </div>
     </div>
 
@@ -121,12 +122,12 @@ body {
         </form>
     </div>
 
-    <!-- CONTAS PRIORITÁRIAS -->
+    <!-- PRIORIDADES -->
     <div class="card-premium">
         <h6>Contas Prioritárias</h6>
         {% if prioridades %}
             {% for p in prioridades %}
-                <div class="d-flex justify-content-between gasto-item">
+                <div class="d-flex justify-content-between item-linha">
                     <span>{{ p.nome }}</span>
                     <span class="text-danger">{{ p.valor | brl }}</span>
                 </div>
@@ -142,7 +143,7 @@ body {
         <canvas id="graficoCategoria"></canvas>
     </div>
 
-    <!-- EVOLUÇÃO MENSAL -->
+    <!-- GRÁFICO MENSAL -->
     <div class="card-premium">
         <h6 class="text-center mb-3">Evolução Mensal</h6>
         <canvas id="graficoMensal"></canvas>
@@ -151,12 +152,11 @@ body {
 </div>
 
 <script>
-if ("serviceWorker" in navigator) {
+if ("serviceWorker" in navigator") {
     navigator.serviceWorker.register("/static/sw.js");
 }
 
-// GRÁFICO CATEGORIA
-const dados = {{ resumo_categoria | tojson }};
+const dados = {{ resumo_categoria | default([]) | tojson }};
 if (dados.length > 0) {
     const categorias = dados.map(item => item[0]);
     const valores = dados.map(item => item[1]);
@@ -171,13 +171,15 @@ if (dados.length > 0) {
             }]
         },
         options: {
-            plugins: { tooltip: { enabled: false }, legend: { labels: { color: "#ccc" } } }
+            plugins: {
+                tooltip: { enabled: false },
+                legend: { labels: { color: "#ccc" } }
+            }
         }
     });
 }
 
-// GRÁFICO MENSAL
-const dadosMensal = {{ evolucao_mensal | tojson }};
+const dadosMensal = {{ evolucao_mensal | default([]) | tojson }};
 if (dadosMensal.length > 0) {
     const meses = dadosMensal.map(item => item[0]);
     const valores = dadosMensal.map(item => item[1]);
