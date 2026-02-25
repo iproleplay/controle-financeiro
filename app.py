@@ -6,7 +6,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = "segredo_super_forte"
+app.secret_key = os.environ.get("SECRET_KEY", "segredo_super_forte")
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
@@ -42,8 +42,8 @@ def criar_tabelas():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS configuracoes (
         usuario_id INTEGER PRIMARY KEY,
-        salario NUMERIC,
-        meta NUMERIC
+        salario NUMERIC DEFAULT 0,
+        meta NUMERIC DEFAULT 1000
     )
     """)
 
@@ -131,58 +131,102 @@ def dashboard():
         return redirect("/")
 
     usuario_id = session["usuario_id"]
-
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT salario, meta FROM configuracoes WHERE usuario_id=%s", (usuario_id,))
-    config = cursor.fetchone()
-
-    salario = float(config["salario"]) if config and config["salario"] else 0
-    meta = float(config["meta"]) if config and config["meta"] else 1000
-
+    # ===== POST =====
     if request.method == "POST":
         tipo = request.form.get("tipo")
 
         if tipo == "meta":
             meta = float(request.form["meta"])
             cursor.execute("""
-            INSERT INTO configuracoes (usuario_id, salario, meta)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (usuario_id)
-            DO UPDATE SET meta=EXCLUDED.meta
-            """, (usuario_id, salario, meta))
+                INSERT INTO configuracoes (usuario_id, meta)
+                VALUES (%s, %s)
+                ON CONFLICT (usuario_id)
+                DO UPDATE SET meta=EXCLUDED.meta
+            """, (usuario_id, meta))
             conn.commit()
 
         elif tipo == "gasto":
             descricao = request.form["descricao"]
             valor = float(request.form["valor"])
             categoria = request.form["categoria"]
-            data_atual = datetime.now().date()
+            data = datetime.now().date()
 
             cursor.execute("""
-            INSERT INTO gastos (usuario_id, descricao, valor, categoria, data)
-            VALUES (%s, %s, %s, %s, %s)
-            """, (usuario_id, descricao, valor, categoria, data_atual))
+                INSERT INTO gastos (usuario_id, descricao, valor, categoria, data)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (usuario_id, descricao, valor, categoria, data))
             conn.commit()
 
+        elif tipo == "prioridade":
+            nome = request.form["nome"]
+            valor = float(request.form["valor"])
+
+            cursor.execute("""
+                INSERT INTO prioridades (usuario_id, nome, valor)
+                VALUES (%s, %s, %s)
+            """, (usuario_id, nome, valor))
+            conn.commit()
+
+    # ===== CONFIG =====
+    cursor.execute("SELECT salario, meta FROM configuracoes WHERE usuario_id=%s", (usuario_id,))
+    config = cursor.fetchone()
+
+    salario = float(config["salario"]) if config and config["salario"] else 0
+    meta = float(config["meta"]) if config and config["meta"] else 1000
+
+    # ===== TOTAIS =====
     cursor.execute("SELECT SUM(valor) AS total FROM gastos WHERE usuario_id=%s", (usuario_id,))
     total_gastos = cursor.fetchone()["total"] or 0
 
-    cursor.execute("SELECT SUM(valor) AS total FROM prioridades WHERE usuario_id=%s", (usuario_id,))
-    total_prioridades = cursor.fetchone()["total"] or 0
+    cursor.execute("SELECT nome, valor FROM prioridades WHERE usuario_id=%s", (usuario_id,))
+    prioridades = cursor.fetchall()
+    total_prioridades = sum(float(p["valor"]) for p in prioridades) if prioridades else 0
 
-    saldo = salario - float(total_gastos) - float(total_prioridades)
+    saldo = salario - float(total_gastos) - total_prioridades
+    patrimonio = saldo
     progresso = min((saldo / meta) * 100, 100) if meta > 0 else 0
-    falta = max(meta - saldo, 0)
 
+    # ===== HISTÓRICO POR MÊS =====
+    cursor.execute("""
+        SELECT TO_CHAR(data, 'Month YYYY') AS mes,
+               descricao,
+               valor
+        FROM gastos
+        WHERE usuario_id=%s
+        ORDER BY data DESC
+    """, (usuario_id,))
+
+    historico_rows = cursor.fetchall()
+    historico = {}
+
+    for row in historico_rows:
+        mes = row["mes"].strip()
+        if mes not in historico:
+            historico[mes] = []
+        historico[mes].append(row)
+
+    # ===== RESUMO CATEGORIA =====
     cursor.execute("""
         SELECT categoria, SUM(valor) AS total
         FROM gastos
         WHERE usuario_id=%s
         GROUP BY categoria
     """, (usuario_id,))
-    resumo_categoria = [(row["categoria"], float(row["total"])) for row in cursor.fetchall()]
+    resumo_categoria = [(r["categoria"], float(r["total"])) for r in cursor.fetchall()]
+
+    # ===== EVOLUÇÃO MENSAL =====
+    cursor.execute("""
+        SELECT TO_CHAR(data, 'Mon') AS mes,
+               SUM(valor) AS total
+        FROM gastos
+        WHERE usuario_id=%s
+        GROUP BY mes
+        ORDER BY mes
+    """, (usuario_id,))
+    evolucao_mensal = [(r["mes"], float(r["total"])) for r in cursor.fetchall()]
 
     conn.close()
 
@@ -191,11 +235,13 @@ def dashboard():
         nome=session["nome"],
         salario=salario,
         saldo=saldo,
+        patrimonio=patrimonio,
         meta=meta,
         progresso=progresso,
-        falta=falta,
+        prioridades=prioridades,
+        historico=historico,
         resumo_categoria=resumo_categoria,
-        total_prioridades=total_prioridades
+        evolucao_mensal=evolucao_mensal
     )
 
 
