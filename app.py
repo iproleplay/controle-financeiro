@@ -3,7 +3,7 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, date
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "segredo_super_forte")
@@ -75,12 +75,11 @@ def criar_tabelas():
     conn.close()
 
 
-# Inicialização segura
 try:
     criar_tabelas()
     garantir_coluna_role()
 except Exception as e:
-    print("Erro na inicialização:", e)
+    print("Erro inicialização:", e)
 
 
 # ================= FILTRO BRL =================
@@ -168,113 +167,69 @@ def dashboard():
             """, (usuario_id, descricao, valor, categoria, data))
             conn.commit()
 
-        elif tipo == "prioridade":
-            nome = request.form["nome"]
-            valor = float(request.form["valor"])
-
-            cursor.execute("""
-                INSERT INTO prioridades (usuario_id, nome, valor)
-                VALUES (%s, %s, %s)
-            """, (usuario_id, nome, valor))
-            conn.commit()
-
-        elif tipo == "meta":
-            meta = float(request.form["meta"])
-
-            cursor.execute("""
-                INSERT INTO configuracoes (usuario_id, meta)
-                VALUES (%s, %s)
-                ON CONFLICT (usuario_id)
-                DO UPDATE SET meta=EXCLUDED.meta
-            """, (usuario_id, meta))
-            conn.commit()
-
-    # CONFIG
-    cursor.execute("SELECT salario, meta FROM configuracoes WHERE usuario_id=%s", (usuario_id,))
-    config = cursor.fetchone()
-
-    salario = float(config["salario"]) if config and config["salario"] else 0
-    meta = float(config["meta"]) if config and config["meta"] else 1000
-
+    # Saldo
     cursor.execute("SELECT SUM(valor) AS total FROM gastos WHERE usuario_id=%s", (usuario_id,))
     total_gastos = float(cursor.fetchone()["total"] or 0)
 
-    cursor.execute("SELECT nome, valor FROM prioridades WHERE usuario_id=%s", (usuario_id,))
-    prioridades = cursor.fetchall()
-    total_prioridades = sum(float(p["valor"]) for p in prioridades) if prioridades else 0
+    saldo = -total_gastos
 
-    saldo = salario - total_gastos - total_prioridades
-    progresso = min((saldo / meta) * 100, 100) if meta > 0 else 0
-
-    # ================= HISTÓRICO ORGANIZADO =================
+    # ================= EVOLUÇÃO MENSAL =================
     cursor.execute("""
-        SELECT data, descricao, valor
+        SELECT DATE_TRUNC('month', data) AS mes,
+               SUM(valor) AS total
         FROM gastos
         WHERE usuario_id=%s
-        ORDER BY data DESC
+        GROUP BY mes
+        ORDER BY mes
     """, (usuario_id,))
 
-    historico_rows = cursor.fetchall()
-    historico = {}
+    evolucao_rows = cursor.fetchall()
 
-    meses_pt = [
-        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-    ]
+    meses_pt = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
+    evolucao_mensal = []
 
-    for row in historico_rows:
-        data = row["data"]
-        mes_nome = meses_pt[data.month - 1]
-        chave_mes = f"{mes_nome} {data.year}"
+    for row in evolucao_rows:
+        data_mes = row["mes"]
+        nome_mes = f"{meses_pt[data_mes.month - 1]}/{data_mes.year}"
+        evolucao_mensal.append((nome_mes, float(row["total"])))
 
-        if chave_mes not in historico:
-            historico[chave_mes] = []
-
-        historico[chave_mes].append({
-            "descricao": row["descricao"],
-            "valor": float(row["valor"])
-        })
-
-    # RESUMO CATEGORIA
+    # ================= COMPARAÇÃO =================
     cursor.execute("""
-        SELECT categoria, SUM(valor) AS total
+        SELECT DATE_TRUNC('month', data) AS mes,
+               SUM(valor) AS total
         FROM gastos
         WHERE usuario_id=%s
-        GROUP BY categoria
+        GROUP BY mes
+        ORDER BY mes DESC
+        LIMIT 2
     """, (usuario_id,))
-    resumo_categoria = [(r["categoria"], float(r["total"])) for r in cursor.fetchall()]
+
+    comparacao_rows = cursor.fetchall()
+
+    mes_atual_total = 0
+    mes_anterior_total = 0
+    variacao_percentual = 0
+
+    if len(comparacao_rows) > 0:
+        mes_atual_total = float(comparacao_rows[0]["total"] or 0)
+
+    if len(comparacao_rows) > 1:
+        mes_anterior_total = float(comparacao_rows[1]["total"] or 0)
+
+    if mes_anterior_total > 0:
+        variacao_percentual = ((mes_atual_total - mes_anterior_total) / mes_anterior_total) * 100
 
     conn.close()
 
     return render_template(
         "dashboard.html",
         nome=session["nome"],
-        salario=salario,
         saldo=saldo,
-        meta=meta,
-        progresso=progresso,
-        prioridades=prioridades,
-        historico=historico,
-        resumo_categoria=resumo_categoria
+        evolucao_mensal=evolucao_mensal,
+        mes_atual_total=mes_atual_total,
+        mes_anterior_total=mes_anterior_total,
+        variacao_percentual=variacao_percentual
     )
-
-
-# ================= ADMIN =================
-@app.route("/admin")
-def admin():
-    if "usuario_id" not in session:
-        return redirect("/")
-
-    if session.get("role") != "admin":
-        return "Acesso restrito ao administrador"
-
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, nome, email, role FROM usuarios ORDER BY id DESC")
-    usuarios = cursor.fetchall()
-    conn.close()
-
-    return render_template("admin.html", usuarios=usuarios)
 
 
 @app.route("/logout")
