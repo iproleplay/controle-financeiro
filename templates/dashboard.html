@@ -5,9 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dashboard</title>
 
-<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-<meta name="theme-color" content="#d4af37">
-
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -22,12 +19,11 @@ body {
     background: linear-gradient(145deg, #17171c, #111114);
     border: 1px solid #23232a;
     border-radius: 20px;
-    padding: 22px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.4);
-    margin-bottom: 20px;
+    padding: 25px;
+    box-shadow: 0 0 25px rgba(0,0,0,0.4);
 }
 
-.valor-grande {
+.valor {
     font-size: 1.6rem;
     font-weight: 600;
 }
@@ -37,26 +33,19 @@ body {
     border: none;
     color: black;
     font-weight: 600;
-    border-radius: 12px;
-}
-
-.progress {
-    height: 10px;
     border-radius: 10px;
-    background-color: #222;
 }
 
-.progress-bar {
-    background: linear-gradient(90deg, #d4af37, #f4d03f);
-}
-
-.item-linha {
-    border-bottom: 1px solid #2a2a33;
-    padding: 10px 0;
+.form-control, .form-select {
+    background-color: #141418;
+    border: 1px solid #2a2a33;
+    color: #f1f1f1;
+    border-radius: 10px;
 }
 
 canvas {
-    max-height: 250px;
+    max-width: 300px;
+    margin: auto;
 }
 </style>
 </head>
@@ -67,178 +56,146 @@ canvas {
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h5>Olá, {{ nome }}</h5>
-    <a href="/logout" class="btn btn-outline-light btn-sm">Sair</a>
+    <div>
+        {% if session.role == 'admin' %}
+        <a href="/admin" class="btn btn-outline-warning btn-sm">Admin</a>
+        {% endif %}
+        <a href="/logout" class="btn btn-outline-light btn-sm">Sair</a>
+    </div>
 </div>
 
-<!-- RESUMO -->
-<div class="row">
+<div class="row mb-4">
     <div class="col-md-4">
         <div class="card-premium text-center">
-            <small>Salário</small>
-            <div class="valor-grande text-warning">{{ salario | brl }}</div>
+            <small>Saldo Atual</small>
+            <div class="valor text-success">{{ saldo | brl }}</div>
         </div>
     </div>
 
     <div class="col-md-4">
         <div class="card-premium text-center">
-            <small>Saldo</small>
-            <div class="valor-grande {% if saldo >= 0 %}text-success{% else %}text-danger{% endif %}">
-                {{ saldo | brl }}
+            <small>Meta</small>
+            <div class="valor text-warning">{{ meta | brl }}</div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card-premium text-center">
+            <small>Progresso</small>
+            <div class="valor text-info">{{ progresso|round(1) }}%</div>
+            <div class="progress mt-2" style="height:8px;">
+                <div class="progress-bar bg-warning"
+                     style="width: {{ progresso }}%;">
+                </div>
             </div>
         </div>
     </div>
+</div>
 
+<div class="row mb-4">
     <div class="col-md-4">
+        <div class="card-premium">
+            <h6>Adicionar Gasto</h6>
+            <form method="POST">
+                <input type="hidden" name="tipo" value="gasto">
+                <input type="text" name="descricao" class="form-control mb-2" placeholder="Descrição" required>
+                <input type="number" step="0.01" name="valor" class="form-control mb-2" placeholder="Valor" required>
+                <select name="categoria" class="form-select mb-2" required>
+                    <option value="Alimentação">Alimentação</option>
+                    <option value="Transporte">Transporte</option>
+                    <option value="Lazer">Lazer</option>
+                    <option value="Fixo">Fixo</option>
+                    <option value="Outros">Outros</option>
+                </select>
+                <button class="btn btn-gold w-100">Adicionar</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-md-8">
         <div class="card-premium text-center">
-            <small>Patrimônio</small>
-            <div class="valor-grande text-info">{{ patrimonio | brl }}</div>
+            <h6>Distribuição de Gastos</h6>
+            <canvas id="graficoCategoria"></canvas>
         </div>
     </div>
 </div>
 
-<!-- META -->
-<div class="card-premium">
-    <h6 class="mb-3">Meta de Economia</h6>
+<div class="card-premium mt-4">
+    <h6 class="mb-3">Histórico Mensal</h6>
 
-    <form method="POST">
-        <input type="hidden" name="tipo" value="meta">
-
-        <input type="range"
-               min="0"
-               max="20000"
-               step="100"
-               name="meta"
-               value="{{ meta or 0 }}"
-               class="form-range"
-               oninput="metaValor.innerText = this.value">
-
-        <div class="d-flex justify-content-between mt-2">
-            <small>0</small>
-            <strong class="text-warning">R$ <span id="metaValor">{{ meta or 0 }}</span></strong>
-            <small>20.000</small>
-        </div>
-
-        <button class="btn btn-gold w-100 mt-3">Salvar Meta</button>
-    </form>
-
-    <div class="mt-4">
-        <div class="progress">
-            <div class="progress-bar" style="width: {{ progresso or 0 }}%"></div>
-        </div>
-        <small class="text-muted">{{ (progresso or 0)|round(1) }}% concluído</small>
-    </div>
-</div>
-
-<!-- ADICIONAR GASTO -->
-<div class="card-premium">
-    <h6 class="mb-3">Adicionar Gasto</h6>
-    <form method="POST">
-        <input type="hidden" name="tipo" value="gasto">
-        <input type="text" name="descricao" class="form-control mb-2" placeholder="Descrição" required>
-        <input type="number" step="0.01" name="valor" class="form-control mb-2" placeholder="Valor" required>
-        <select name="categoria" class="form-select mb-2" required>
-            <option>Alimentação</option>
-            <option>Transporte</option>
-            <option>Lazer</option>
-            <option>Fixo</option>
-            <option>Outros</option>
-        </select>
-        <button class="btn btn-gold w-100">Adicionar</button>
-    </form>
-</div>
-
-<!-- PRIORIDADES -->
-<div class="card-premium">
-    <h6 class="mb-3">Contas Prioritárias</h6>
-
-    {% if prioridades %}
-        {% for p in prioridades %}
-            <div class="d-flex justify-content-between item-linha">
-                <span>{{ p.nome }}</span>
-                <span class="text-danger">{{ p.valor | brl }}</span>
-            </div>
+    <select id="filtroMes" class="form-select mb-3">
+        <option value="todos">Todos os meses</option>
+        {% for mes in historico.keys() %}
+        <option value="{{ mes }}">{{ mes }}</option>
         {% endfor %}
-    {% else %}
-        <small class="text-muted">Nenhuma prioridade cadastrada.</small>
-    {% endif %}
+    </select>
 
-    <hr class="text-secondary">
+    {% for mes, dados in historico.items() %}
+    <div class="mes-bloco mb-3" data-mes="{{ mes }}">
+        <div class="d-flex justify-content-between align-items-center"
+             style="cursor:pointer"
+             onclick="toggleMes('{{ mes }}')">
 
-    <h6 class="mt-3">Adicionar Conta Prioritária</h6>
-    <form method="POST">
-        <input type="hidden" name="tipo" value="prioridade">
-        <input type="text" name="nome" class="form-control mb-2" placeholder="Nome da conta" required>
-        <input type="number" step="0.01" name="valor" class="form-control mb-2" placeholder="Valor" required>
-        <button class="btn btn-gold w-100">Adicionar</button>
-    </form>
-</div>
+            <strong>{{ mes }}</strong>
+            <span class="text-warning">
+                Total: {{ dados.total | brl }}
+            </span>
+        </div>
 
-<!-- HISTÓRICO POR MÊS -->
-<div class="card-premium">
-    <h6 class="mb-3">Histórico por Mês</h6>
-
-    {% if historico %}
-        {% for mes, gastos in historico.items() %}
-            <div class="mb-3">
-                <strong class="text-warning">{{ mes }}</strong>
-                {% for g in gastos %}
-                    <div class="d-flex justify-content-between item-linha">
-                        <span>{{ g.descricao }}</span>
-                        <span>{{ g.valor | brl }}</span>
-                    </div>
-                {% endfor %}
+        <div id="conteudo-{{ mes }}" class="mt-2" style="display:none;">
+            {% for gasto in dados.gastos %}
+            <div class="d-flex justify-content-between small py-1 border-bottom border-dark">
+                <span>{{ gasto.descricao }}</span>
+                <span class="text-danger">{{ gasto.valor | brl }}</span>
             </div>
-        {% endfor %}
-    {% else %}
-        <small class="text-muted">Nenhum gasto registrado.</small>
-    {% endif %}
-</div>
-
-<!-- GRÁFICO CATEGORIA -->
-<div class="card-premium">
-    <h6 class="text-center mb-3">Distribuição de Gastos</h6>
-    <canvas id="graficoCategoria"></canvas>
-</div>
-
-<!-- GRÁFICO MENSAL -->
-<div class="card-premium">
-    <h6 class="text-center mb-3">Evolução Mensal</h6>
-    <canvas id="graficoMensal"></canvas>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
 </div>
 
 </div>
 
 <script>
-const dados = {{ resumo_categoria | default([]) | tojson }};
+const dados = {{ resumo_categoria | tojson }};
 if (dados.length > 0) {
+    const categorias = dados.map(item => item[0]);
+    const valores = dados.map(item => item[1]);
+
     new Chart(document.getElementById("graficoCategoria"), {
         type: "doughnut",
         data: {
-            labels: dados.map(d => d[0]),
+            labels: categorias,
             datasets: [{
-                data: dados.map(d => d[1]),
+                data: valores,
                 backgroundColor: ["#2ecc71","#3498db","#9b59b6","#e74c3c","#f39c12"],
                 borderWidth: 0
             }]
         },
-        options: { plugins: { tooltip: { enabled: false } } }
-    });
-}
-
-const mensal = {{ evolucao_mensal | default([]) | tojson }};
-if (mensal.length > 0) {
-    new Chart(document.getElementById("graficoMensal"), {
-        type: "line",
-        data: {
-            labels: mensal.map(d => d[0]),
-            datasets: [{
-                data: mensal.map(d => d[1]),
-                borderColor: "#d4af37",
-                tension: 0.4
-            }]
+        options: {
+            plugins: {
+                legend: { labels: { color: "#ccc" } },
+                tooltip: { enabled: false }
+            }
         }
     });
 }
+
+function toggleMes(mes) {
+    const el = document.getElementById("conteudo-" + mes);
+    el.style.display = el.style.display === "none" ? "block" : "none";
+}
+
+document.getElementById("filtroMes").addEventListener("change", function() {
+    const valor = this.value;
+    document.querySelectorAll(".mes-bloco").forEach(bloco => {
+        if (valor === "todos" || bloco.dataset.mes === valor) {
+            bloco.style.display = "block";
+        } else {
+            bloco.style.display = "none";
+        }
+    });
+});
 </script>
 
 </body>
