@@ -6,46 +6,116 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-body{background:#0f172a;color:white;font-family:Arial;margin:0;padding:20px;}
-h1{text-align:center;margin-bottom:10px;}
-
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:25px;margin-top:20px;}
-
-.card{background:#1e293b;padding:20px;border-radius:12px;box-shadow:0 0 15px rgba(0,0,0,0.4);}
-
-input,select,button{
-    padding:8px;border-radius:6px;border:none;margin:5px 0;
+body{
+    background:#0f172a;
+    color:white;
+    font-family:Arial, sans-serif;
+    margin:0;
+    padding:20px;
 }
 
-button{background:#3b82f6;color:white;cursor:pointer;}
+h1{
+    text-align:center;
+    margin-bottom:20px;
+}
 
-.resumo-topo{display:flex;justify-content:space-around;margin-bottom:20px;}
-.resumo-box{background:#1e293b;padding:15px;border-radius:10px;width:23%;text-align:center;}
+.grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:25px;
+    margin-top:20px;
+}
+
+.card{
+    background:#1e293b;
+    padding:20px;
+    border-radius:14px;
+    border:1px solid rgba(255,255,255,0.05);
+    box-shadow:0 10px 25px rgba(0,0,0,0.35);
+    transition:0.2s ease-in-out;
+}
+
+.card:hover{
+    transform:translateY(-2px);
+    box-shadow:0 15px 35px rgba(0,0,0,0.45);
+}
+
+input,select{
+    padding:10px;
+    border-radius:8px;
+    border:1px solid rgba(255,255,255,0.1);
+    background:#334155;
+    color:white;
+    width:100%;
+    margin-bottom:10px;
+}
+
+button{
+    padding:10px;
+    border-radius:8px;
+    border:none;
+    background:#3b82f6;
+    color:white;
+    cursor:pointer;
+    transition:0.2s;
+}
+
+button:hover{
+    background:#2563eb;
+}
+
+.resumo-topo{
+    display:flex;
+    justify-content:space-between;
+    gap:20px;
+    margin-bottom:25px;
+}
+
+.resumo-box{
+    background:#1e293b;
+    padding:18px;
+    border-radius:14px;
+    border:1px solid rgba(255,255,255,0.05);
+    box-shadow:0 8px 20px rgba(0,0,0,0.3);
+    flex:1;
+    text-align:center;
+}
 
 .progress{
     background:#334155;
-    border-radius:10px;
-    height:20px;
+    border-radius:20px;
+    height:18px;
+    margin-top:8px;
     overflow:hidden;
 }
+
 .progress-bar{
     height:100%;
-    background:#22c55e;
+    transition:0.4s ease;
 }
 
 .gasto-item{
     background:#334155;
-    padding:10px;
-    border-radius:8px;
-    margin-bottom:8px;
+    padding:14px;
+    border-radius:10px;
+    margin-bottom:10px;
+    border:1px solid rgba(255,255,255,0.05);
     display:flex;
     justify-content:space-between;
     align-items:center;
+    transition:0.2s;
+}
+
+.gasto-item:hover{
+    background:#3f4f65;
 }
 
 .red{color:#ef4444;}
 .green{color:#22c55e;}
-canvas{max-height:320px;}
+
+canvas{
+    max-height:320px;
+}
 </style>
 </head>
 <body>
@@ -85,7 +155,7 @@ canvas{max-height:320px;}
 </div>
 
 <div class="resumo-box">
-<h4>Gastos</h4>
+<h4>Total Gastos</h4>
 <p>{{ (renda_mensal - saldo) | brl }}</p>
 </div>
 
@@ -100,20 +170,22 @@ canvas{max-height:320px;}
 <h4>% Comprometido</h4>
 <p>{{ "%.1f"|format(percentual) }}%</p>
 <div class="progress">
-<div class="progress-bar" style="width: {{ percentual }}%; background: {{ '#ef4444' if percentual>100 else '#22c55e' }}"></div>
+<div class="progress-bar"
+style="width: {{ percentual }}%; background: {{ '#ef4444' if percentual>100 else '#22c55e' }}">
+</div>
 </div>
 </div>
 
 </div>
 
-<!-- FORMULARIOS -->
+<!-- FORMULÁRIOS -->
 <div class="grid">
 
 <div class="card">
 <h3>💰 Definir Renda</h3>
 <form method="POST">
 <input type="hidden" name="tipo" value="renda">
-<input type="number" step="0.01" name="renda" required>
+<input type="number" step="0.01" name="renda" placeholder="Digite sua renda mensal" required>
 <button>Salvar</button>
 </form>
 </div>
@@ -138,7 +210,7 @@ canvas{max-height:320px;}
 
 </div>
 
-<!-- GRAFICOS -->
+<!-- GRÁFICOS -->
 <div class="grid">
 
 <div class="card">
@@ -157,6 +229,7 @@ canvas{max-height:320px;}
 <div class="card" style="margin-top:20px;">
 <h3>🧾 Lista de Gastos</h3>
 
+{% if gastos %}
 {% for g in gastos %}
 <div class="gasto-item">
 <div>
@@ -170,6 +243,9 @@ canvas{max-height:320px;}
 </div>
 </div>
 {% endfor %}
+{% else %}
+<p>Nenhum gasto registrado.</p>
+{% endif %}
 
 </div>
 
