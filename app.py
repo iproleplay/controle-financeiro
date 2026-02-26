@@ -9,10 +9,9 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "seguro123")
 
 
-# ================= CONEXÃO SEGURA =================
+# ================= CONEXÃO =================
 def get_connection():
     DATABASE_URL = os.environ.get("DATABASE_URL")
-
     if not DATABASE_URL:
         print("DATABASE_URL não configurada.")
         return None
@@ -24,11 +23,11 @@ def get_connection():
             connect_timeout=5
         )
     except Exception as e:
-        print("Erro ao conectar no banco:", e)
+        print("Erro ao conectar:", e)
         return None
 
 
-# ================= CRIAR COLUNA META AUTOMATICAMENTE =================
+# ================= GARANTIR COLUNA META =================
 def garantir_coluna_meta():
     conn = get_connection()
     if not conn:
@@ -43,7 +42,7 @@ def garantir_coluna_meta():
         conn.commit()
         conn.close()
     except Exception as e:
-        print("Erro ao criar coluna meta_percentual:", e)
+        print("Erro criando coluna meta_percentual:", e)
 
 
 with app.app_context():
@@ -62,15 +61,16 @@ def brl(valor):
 # ================= LOGIN =================
 @app.route("/", methods=["GET", "POST"])
 def login():
-    if request.method == "POST":
 
+    if request.method == "POST":
         conn = get_connection()
         if not conn:
-            return "Erro ao conectar ao banco."
+            return "Erro conexão"
 
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM usuarios WHERE email=%s", (request.form.get("email"),))
+            cursor.execute("SELECT * FROM usuarios WHERE email=%s",
+                           (request.form.get("email"),))
             user = cursor.fetchone()
             conn.close()
 
@@ -79,8 +79,8 @@ def login():
                 session["nome"] = user["nome"]
                 session["role"] = user.get("role", "user")
                 return redirect("/dashboard")
-            else:
-                return "Login inválido"
+
+            return "Login inválido"
 
         except Exception as e:
             return f"Erro login: {e}"
@@ -93,10 +93,9 @@ def login():
 def cadastro():
 
     if request.method == "POST":
-
         conn = get_connection()
         if not conn:
-            return "Erro ao conectar ao banco."
+            return "Erro conexão"
 
         try:
             cursor = conn.cursor()
@@ -104,7 +103,7 @@ def cadastro():
 
             cursor.execute("""
                 INSERT INTO usuarios (nome, email, senha, renda_mensal, role, meta_percentual)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                VALUES (%s,%s,%s,%s,%s,%s)
             """, (
                 request.form.get("nome"),
                 request.form.get("email"),
@@ -116,7 +115,6 @@ def cadastro():
 
             conn.commit()
             conn.close()
-
             return redirect("/")
 
         except Exception as e:
@@ -134,23 +132,33 @@ def dashboard():
 
     conn = get_connection()
     if not conn:
-        return "Erro ao conectar ao banco."
+        return "Erro conexão"
 
     try:
         cursor = conn.cursor()
         usuario_id = session["usuario_id"]
 
-        # EXCLUIR GASTO
+        # ================= FILTRO MÊS/ANO =================
+        mes = request.args.get("mes")
+        ano = request.args.get("ano")
+
+        filtro_sql = ""
+        params = [usuario_id]
+
+        if mes and ano:
+            filtro_sql = " AND EXTRACT(MONTH FROM data)=%s AND EXTRACT(YEAR FROM data)=%s "
+            params.extend([int(mes), int(ano)])
+
+        # ================= EXCLUIR GASTO =================
         if request.args.get("excluir"):
             cursor.execute("""
                 DELETE FROM gastos
                 WHERE id=%s AND usuario_id=%s
             """, (request.args.get("excluir"), usuario_id))
             conn.commit()
-            conn.close()
             return redirect("/dashboard")
 
-        # POST
+        # ================= POST =================
         if request.method == "POST":
             tipo = request.form.get("tipo")
 
@@ -189,42 +197,43 @@ def dashboard():
                     ))
                     conn.commit()
 
-        # BUSCAR RENDA E META
+        # ================= RENDA E META =================
         cursor.execute("""
             SELECT renda_mensal, meta_percentual
-            FROM usuarios
-            WHERE id=%s
+            FROM usuarios WHERE id=%s
         """, (usuario_id,))
-        user_row = cursor.fetchone()
+        user = cursor.fetchone()
 
-        renda_mensal = float(user_row["renda_mensal"] or 0)
-        meta_percentual = float(user_row["meta_percentual"] or 70)
+        renda_mensal = float(user["renda_mensal"] or 0)
+        meta_percentual = float(user["meta_percentual"] or 70)
 
-        # GASTOS
-        cursor.execute("""
+        # ================= GASTOS FILTRADOS =================
+        cursor.execute(f"""
             SELECT * FROM gastos
             WHERE usuario_id=%s
+            {filtro_sql}
             ORDER BY data DESC
-        """, (usuario_id,))
+        """, tuple(params))
         gastos = cursor.fetchall()
 
         total_gastos = sum(float(g["valor"]) for g in gastos) if gastos else 0
         saldo = renda_mensal - total_gastos
 
-        # CALCULAR META
+        # ================= META =================
         meta_valor = renda_mensal * (meta_percentual / 100)
         percentual_usado = (total_gastos / meta_valor * 100) if meta_valor > 0 else 0
 
-        # RESUMO CATEGORIA
-        cursor.execute("""
+        # ================= RESUMO CATEGORIA FILTRADO =================
+        cursor.execute(f"""
             SELECT categoria, SUM(valor) as total
             FROM gastos
             WHERE usuario_id=%s
+            {filtro_sql}
             GROUP BY categoria
-        """, (usuario_id,))
+        """, tuple(params))
         resumo_categoria = [(r["categoria"], float(r["total"])) for r in cursor.fetchall()]
 
-        # EVOLUÇÃO MENSAL
+        # ================= EVOLUÇÃO MENSAL (HISTÓRICO) =================
         cursor.execute("""
             SELECT DATE_TRUNC('month', data) as mes, SUM(valor) as total
             FROM gastos
@@ -237,7 +246,8 @@ def dashboard():
 
         for row in cursor.fetchall():
             evolucao_mensal.append(
-                (f"{meses_pt[row['mes'].month-1]}/{row['mes'].year}", float(row["total"]))
+                (f"{meses_pt[row['mes'].month-1]}/{row['mes'].year}",
+                 float(row["total"]))
             )
 
         conn.close()
@@ -275,7 +285,6 @@ def admin():
         cursor.execute("SELECT id, nome, email, role FROM usuarios ORDER BY id")
         usuarios = cursor.fetchall()
         conn.close()
-
         return render_template("admin.html", usuarios=usuarios)
 
     except Exception as e:

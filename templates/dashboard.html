@@ -28,6 +28,38 @@
 
     <div class="content">
 
+        <!-- FILTRO MENSAL -->
+        <div class="card">
+            <form method="GET" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                
+                <select name="mes">
+                    <option value="">Mês</option>
+                    {% for i in range(1,13) %}
+                        <option value="{{i}}" {% if request.args.get('mes') == i|string %}selected{% endif %}>
+                            {{ "%02d"|format(i) }}
+                        </option>
+                    {% endfor %}
+                </select>
+
+                <select name="ano">
+                    <option value="">Ano</option>
+                    {% for y in range(2024, 2031) %}
+                        <option value="{{y}}" {% if request.args.get('ano') == y|string %}selected{% endif %}>
+                            {{y}}
+                        </option>
+                    {% endfor %}
+                </select>
+
+                <button type="submit">Filtrar</button>
+
+                <a href="/dashboard" style="text-decoration:none;">
+                    <button type="button">Limpar</button>
+                </a>
+
+            </form>
+        </div>
+
+
         <!-- RESUMO -->
         <div class="grid">
 
