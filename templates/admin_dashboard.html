@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Dashboard Admin</title>
+
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -11,21 +12,23 @@
 
 <div class="sidebar">
     <h2>👑 Admin Panel</h2>
-    <a href="/admin/dashboard">Dashboard</a>
-    <a href="/admin">Gerenciar Usuários</a>
-    <a href="/dashboard">Voltar para Painel Usuário</a>
+
+    <a href="{{ url_for('admin') }}">Gerenciar Usuários</a>
+    <a href="{{ url_for('dashboard') }}">Painel do Usuário</a>
 </div>
 
 <div class="main">
 
     <div class="navbar">
         <h1>Dashboard Administrativo</h1>
-        <a href="/logout" class="logout-btn">Logout</a>
+        <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
     </div>
 
     <div class="content">
 
+        <!-- CARDS RESUMO -->
         <div class="grid">
+
             <div class="card">
                 <h3>Total Usuários</h3>
                 <div class="stat">{{ total_usuarios }}</div>
@@ -45,8 +48,10 @@
                 <h3>Total Movimentado</h3>
                 <div class="stat">{{ total_movimentado | brl }}</div>
             </div>
+
         </div>
 
+        <!-- GRÁFICO -->
         <div class="card">
             <h3>Distribuição Geral por Categoria</h3>
             <canvas id="graficoAdmin"></canvas>
@@ -57,16 +62,23 @@
 </div>
 
 <script>
-const resumo = {{ resumo_categoria | tojson | safe }};
+const resumo = {{ resumo_categoria | default([]) | tojson | safe }};
 
-if(resumo.length > 0){
-    new Chart(document.getElementById("graficoAdmin"),{
-        type:"doughnut",
-        data:{
-            labels:resumo.map(i=>i[0]),
-            datasets:[{
-                data:resumo.map(i=>i[1]),
-                backgroundColor:["#ef4444","#3b82f6","#facc15","#22c55e","#a855f7","#f97316"]
+if (Array.isArray(resumo) && resumo.length > 0) {
+    new Chart(document.getElementById("graficoAdmin"), {
+        type: "doughnut",
+        data: {
+            labels: resumo.map(i => i[0]),
+            datasets: [{
+                data: resumo.map(i => i[1]),
+                backgroundColor: [
+                    "#ef4444",
+                    "#3b82f6",
+                    "#facc15",
+                    "#22c55e",
+                    "#a855f7",
+                    "#f97316"
+                ]
             }]
         }
     });
