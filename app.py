@@ -167,9 +167,7 @@ def dashboard():
                     conn.commit()
 
         # RENDA
-        cursor.execute("""
-            SELECT renda_mensal FROM usuarios WHERE id=%s
-        """, (usuario_id,))
+        cursor.execute("SELECT renda_mensal FROM usuarios WHERE id=%s", (usuario_id,))
         renda_row = cursor.fetchone()
         renda_mensal = float(renda_row["renda_mensal"] or 0) if renda_row else 0
 
@@ -283,21 +281,34 @@ def admin():
     return render_template("admin.html", usuarios=usuarios)
 
 
+# ================= EXCLUIR USUÁRIO (ADMIN) =================
+@app.route("/admin/excluir/<int:user_id>")
+def excluir_usuario(user_id):
+
+    if session.get("role") != "admin":
+        return "Acesso negado."
+
+    # impedir auto exclusão
+    if user_id == session.get("usuario_id"):
+        return "Você não pode excluir seu próprio usuário."
+
+    conn = get_connection()
+    if not conn:
+        return "Erro ao conectar ao banco."
+
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM gastos WHERE usuario_id=%s", (user_id,))
+    cursor.execute("DELETE FROM usuarios WHERE id=%s", (user_id,))
+
+    conn.commit()
+    conn.close()
+
+    return redirect("/admin")
+
+
 # ================= LOGOUT =================
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect("/")
-
-@app.route("/verificar_role")
-def verificar_role():
-    conn = get_connection()
-    if not conn:
-        return "Erro conexão"
-
-    cursor = conn.cursor()
-    cursor.execute("SELECT email, role FROM usuarios")
-    dados = cursor.fetchall()
-    conn.close()
-
-    return str(dados)
