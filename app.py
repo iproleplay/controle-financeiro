@@ -202,26 +202,3 @@ def logout():
     session.clear()
     return redirect("/")
 
-
-@app.route("/criar_admin")
-def criar_admin():
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    # Criar coluna role se não existir
-    cursor.execute("""
-        ALTER TABLE usuarios
-        ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user';
-    """)
-
-    # Definir seu usuário como admin
-    cursor.execute("""
-        UPDATE usuarios
-        SET role = 'admin'
-        WHERE email = 'tigersplayrole@gmail.com';
-    """)
-
-    conn.commit()
-    conn.close()
-
-    return "Admin configurado com sucesso!"
