@@ -12,6 +12,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "seguro123")
 # ================= CONEXÃO =================
 def get_connection():
     DATABASE_URL = os.environ.get("DATABASE_URL")
+
     if not DATABASE_URL:
         print("DATABASE_URL não configurada.")
         return None
@@ -27,26 +28,36 @@ def get_connection():
         return None
 
 
-# ================= GARANTIR COLUNA META =================
-def garantir_coluna_meta():
+# ================= GARANTIR COLUNAS =================
+def garantir_colunas():
     conn = get_connection()
     if not conn:
         return
 
     try:
         cursor = conn.cursor()
+
+        # Meta percentual
         cursor.execute("""
             ALTER TABLE usuarios
             ADD COLUMN IF NOT EXISTS meta_percentual FLOAT DEFAULT 70;
         """)
+
+        # Tipo de gasto
+        cursor.execute("""
+            ALTER TABLE gastos
+            ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) DEFAULT 'Variável';
+        """)
+
         conn.commit()
         conn.close()
+
     except Exception as e:
-        print("Erro criando coluna meta_percentual:", e)
+        print("Erro ao criar colunas:", e)
 
 
 with app.app_context():
-    garantir_coluna_meta()
+    garantir_colunas()
 
 
 # ================= FILTRO BRL =================
@@ -149,7 +160,7 @@ def dashboard():
             filtro_sql = " AND EXTRACT(MONTH FROM data)=%s AND EXTRACT(YEAR FROM data)=%s "
             params.extend([int(mes), int(ano)])
 
-        # ================= EXCLUIR GASTO =================
+        # ================= EXCLUIR =================
         if request.args.get("excluir"):
             cursor.execute("""
                 DELETE FROM gastos
@@ -183,21 +194,23 @@ def dashboard():
             if tipo == "gasto":
                 valor = request.form.get("valor")
                 categoria = request.form.get("categoria")
+                tipo_gasto = request.form.get("tipo_gasto", "Variável")
 
                 if valor:
                     cursor.execute("""
-                        INSERT INTO gastos (usuario_id, descricao, valor, categoria, data)
-                        VALUES (%s,%s,%s,%s,%s)
+                        INSERT INTO gastos (usuario_id, descricao, valor, categoria, data, tipo)
+                        VALUES (%s,%s,%s,%s,%s,%s)
                     """, (
                         usuario_id,
                         categoria,
                         float(valor),
                         categoria,
-                        datetime.now().date()
+                        datetime.now().date(),
+                        tipo_gasto
                     ))
                     conn.commit()
 
-        # ================= RENDA E META =================
+        # ================= BUSCAR USUÁRIO =================
         cursor.execute("""
             SELECT renda_mensal, meta_percentual
             FROM usuarios WHERE id=%s
@@ -223,7 +236,7 @@ def dashboard():
         meta_valor = renda_mensal * (meta_percentual / 100)
         percentual_usado = (total_gastos / meta_valor * 100) if meta_valor > 0 else 0
 
-        # ================= RESUMO CATEGORIA FILTRADO =================
+        # ================= RESUMO CATEGORIA =================
         cursor.execute(f"""
             SELECT categoria, SUM(valor) as total
             FROM gastos
@@ -233,7 +246,16 @@ def dashboard():
         """, tuple(params))
         resumo_categoria = [(r["categoria"], float(r["total"])) for r in cursor.fetchall()]
 
-        # ================= EVOLUÇÃO MENSAL (HISTÓRICO) =================
+        # ================= RESUMO FIXO VS VARIÁVEL =================
+        cursor.execute("""
+            SELECT tipo, SUM(valor) as total
+            FROM gastos
+            WHERE usuario_id=%s
+            GROUP BY tipo
+        """, (usuario_id,))
+        resumo_tipo = [(r["tipo"], float(r["total"])) for r in cursor.fetchall()]
+
+        # ================= EVOLUÇÃO MENSAL =================
         cursor.execute("""
             SELECT DATE_TRUNC('month', data) as mes, SUM(valor) as total
             FROM gastos
@@ -262,6 +284,7 @@ def dashboard():
             meta_valor=meta_valor,
             percentual_usado=percentual_usado,
             resumo_categoria=resumo_categoria,
+            resumo_tipo=resumo_tipo,
             evolucao_mensal=evolucao_mensal
         )
 
