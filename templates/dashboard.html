@@ -11,7 +11,7 @@
 <body>
 
 <div class="sidebar">
-    <h2>💰 Meu Painel</h2>
+    <h2>💳 FinancePro</h2>
 
     <a href="/dashboard"
        class="{% if request.path == '/dashboard' %}active{% endif %}">
@@ -29,7 +29,7 @@
 <div class="main">
 
     <div class="navbar">
-        <h1>Bem-vindo, {{ nome }}</h1>
+        <h1>Olá, {{ nome }}</h1>
         <a href="/logout" class="logout-btn">Logout</a>
     </div>
 
@@ -37,7 +37,7 @@
 
         <!-- FILTRO -->
         <div class="card">
-            <form method="GET">
+            <form method="GET" style="display:flex; gap:10px; flex-wrap:wrap;">
                 <select name="mes">
                     <option value="">Mês</option>
                     {% for i in range(1,13) %}
@@ -118,7 +118,7 @@
                     </div>
                 </div>
 
-                <small style="opacity:0.7;">
+                <small style="opacity:0.6;">
                     {{ percentual_usado|round(1) }}% utilizado da meta
                 </small>
             </div>
@@ -181,7 +181,7 @@
 
         </div>
 
-        <!-- LISTA PROFISSIONAL -->
+        <!-- LISTA -->
         <div class="card">
             <h3>Contas Registradas</h3>
 
@@ -226,36 +226,55 @@ const resumoCategoria = {{ resumo_categoria | default([]) | tojson | safe }};
 const resumoTipo = {{ resumo_tipo | default([]) | tojson | safe }};
 const evolucaoMensal = {{ evolucao_mensal | default([]) | tojson | safe }};
 
-// Categoria
-if (Array.isArray(resumoCategoria) && resumoCategoria.length > 0) {
+const configPadrao = {
+    plugins: {
+        tooltip: {
+            callbacks: {
+                label: function(context) {
+                    return "R$ " + context.raw.toLocaleString("pt-BR");
+                }
+            }
+        },
+        legend: {
+            labels: {
+                color: "#ffffff",
+                usePointStyle: true
+            }
+        }
+    }
+};
+
+if (resumoCategoria.length > 0) {
     new Chart(document.getElementById("graficoCategoria"), {
         type: "doughnut",
         data: {
             labels: resumoCategoria.map(i => i[0]),
             datasets: [{
                 data: resumoCategoria.map(i => i[1]),
-                backgroundColor: ["#ef4444","#3b82f6","#facc15","#22c55e","#a855f7","#f97316"]
+                backgroundColor: ["#ef4444","#3b82f6","#facc15","#22c55e","#a855f7","#f97316"],
+                borderWidth: 2
             }]
-        }
+        },
+        options: configPadrao
     });
 }
 
-// Tipo
-if (Array.isArray(resumoTipo) && resumoTipo.length > 0) {
+if (resumoTipo.length > 0) {
     new Chart(document.getElementById("graficoTipo"), {
         type: "pie",
         data: {
             labels: resumoTipo.map(i => i[0]),
             datasets: [{
                 data: resumoTipo.map(i => i[1]),
-                backgroundColor: ["#3b82f6","#ef4444"]
+                backgroundColor: ["#3b82f6","#ef4444"],
+                borderWidth: 2
             }]
-        }
+        },
+        options: configPadrao
     });
 }
 
-// Evolução
-if (Array.isArray(evolucaoMensal) && evolucaoMensal.length > 0) {
+if (evolucaoMensal.length > 0) {
     new Chart(document.getElementById("graficoMensal"), {
         type: "line",
         data: {
@@ -263,10 +282,25 @@ if (Array.isArray(evolucaoMensal) && evolucaoMensal.length > 0) {
             datasets: [{
                 label: "Total por Mês",
                 data: evolucaoMensal.map(i => i[1]),
-                borderColor: "#3b82f6",
-                tension: 0.3,
-                fill: false
+                borderColor: "#22c55e",
+                backgroundColor: "rgba(34,197,94,0.1)",
+                tension: 0.4,
+                fill: true
             }]
+        },
+        options: {
+            ...configPadrao,
+            scales: {
+                x: { ticks: { color: "#ffffff" }},
+                y: {
+                    ticks: {
+                        color: "#ffffff",
+                        callback: function(value) {
+                            return "R$ " + value.toLocaleString("pt-BR");
+                        }
+                    }
+                }
+            }
         }
     });
 }
