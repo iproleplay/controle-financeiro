@@ -89,11 +89,6 @@ input,select{
     margin-bottom:14px;
 }
 
-input:focus, select:focus{
-    outline:none;
-    border-color:#3b82f6;
-}
-
 button{
     width:100%;
     padding:14px;
@@ -122,12 +117,17 @@ button:hover{
     flex-wrap:wrap;
 }
 
-.gasto-info{display:flex; flex-direction:column;}
+.gasto-info{
+    display:flex;
+    flex-direction:column;
+}
 
 .red{color:#ef4444;}
 .green{color:#22c55e;}
 
-canvas{max-height:320px;}
+canvas{
+    max-height:300px;
+}
 
 @media(max-width:768px){
     body{padding:18px;}
@@ -163,7 +163,7 @@ canvas{max-height:320px;}
 </div>
 
 <div class="resumo-box">
-<h4>Meta (70%)</h4>
+<h4>Meta 70%</h4>
 <p>{{ meta | brl }}</p>
 <div class="progress">
 <div class="progress-bar"
@@ -181,19 +181,19 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); margin-bottom:35px;">
 
 <div class="card">
-<h3>💰 Definir Renda</h3>
+<h3>💰 Definir Renda Mensal</h3>
 <form method="POST">
 <input type="hidden" name="tipo" value="renda">
-<input type="number" step="0.01" name="renda" placeholder="Digite sua renda mensal">
+<input type="number" step="0.01" name="renda" placeholder="Digite sua renda">
 <button>Salvar</button>
 </form>
 </div>
 
 <div class="card">
-<h3>➕ Adicionar Gasto</h3>
+<h3>⭐ Contas Prioritárias</h3>
 <form method="POST">
 <input type="hidden" name="tipo" value="gasto">
-<input type="text" name="descricao" placeholder="Descrição">
+<input type="text" name="descricao" placeholder="Descrição da conta">
 <input type="number" step="0.01" name="valor" placeholder="Valor">
 <select name="categoria">
 <option>Aluguel</option>
@@ -203,7 +203,7 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 <option>Mercado</option>
 <option>Outros</option>
 </select>
-<button>Adicionar</button>
+<button>Adicionar Conta</button>
 </form>
 </div>
 
@@ -213,7 +213,7 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); margin-bottom:35px;">
 
 <div class="card">
-<h3>🎯 Gastos por Categoria</h3>
+<h3>🎯 Distribuição por Categoria</h3>
 <canvas id="graficoCategoria"></canvas>
 </div>
 
@@ -226,7 +226,7 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 
 <!-- LISTA -->
 <div class="card">
-<h3>🧾 Lista de Gastos</h3>
+<h3>🧾 Contas Registradas</h3>
 
 {% if gastos %}
 {% for g in gastos %}
@@ -239,16 +239,16 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 </div>
 {% endfor %}
 {% else %}
-<p>Nenhum gasto registrado.</p>
+<p>Nenhuma conta registrada.</p>
 {% endif %}
 
 </div>
 
 <script>
-const resumoCategoria = {{ resumo_categoria | tojson }};
-const evolucaoMensal = {{ evolucao_mensal | tojson }};
+const resumoCategoria = {{ resumo_categoria | tojson | safe }};
+const evolucaoMensal = {{ evolucao_mensal | tojson | safe }};
 
-if(resumoCategoria.length > 0){
+if(resumoCategoria && resumoCategoria.length > 0){
     new Chart(document.getElementById("graficoCategoria"),{
         type:"doughnut",
         data:{
@@ -261,7 +261,7 @@ if(resumoCategoria.length > 0){
     });
 }
 
-if(evolucaoMensal.length > 0){
+if(evolucaoMensal && evolucaoMensal.length > 0){
     new Chart(document.getElementById("graficoMensal"),{
         type:"line",
         data:{
