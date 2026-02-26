@@ -1,53 +1,70 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-br">
 <head>
 <meta charset="UTF-8">
-<title>Painel Admin</title>
-<style>
-body{background:#0f172a;color:white;font-family:Arial;padding:30px;}
-h2{text-align:center;margin-bottom:30px;}
-table{width:100%;border-collapse:collapse;background:#1e293b;}
-th,td{padding:12px;border-bottom:1px solid #334155;text-align:left;}
-input,select{padding:5px;}
-button{background:#3b82f6;color:white;border:none;padding:6px 10px;cursor:pointer;}
-a{color:red;text-decoration:none;margin-left:10px;}
-</style>
+<title>Gerenciar Usuários</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
 
-<h2>Painel Administrativo</h2>
+<div class="sidebar">
+    <h2>👑 Admin Panel</h2>
+    <a href="/admin/dashboard">Dashboard</a>
+    <a href="/admin">Gerenciar Usuários</a>
+    <a href="/dashboard">Voltar para Painel Usuário</a>
+</div>
 
-<table>
-<tr>
-<th>ID</th>
-<th>Nome</th>
-<th>Email</th>
-<th>Role</th>
-<th>Ações</th>
-</tr>
+<div class="main">
 
-{% for u in usuarios %}
-<tr>
-<form method="POST" action="/admin/editar/{{u.id}}">
-<td>{{u.id}}</td>
-<td><input name="nome" value="{{u.nome}}"></td>
-<td><input name="email" value="{{u.email}}"></td>
-<td>
-<select name="role">
-<option value="user" {% if u.role == 'user' %}selected{% endif %}>User</option>
-<option value="admin" {% if u.role == 'admin' %}selected{% endif %}>Admin</option>
-</select>
-</td>
-<td>
-<input type="password" name="senha" placeholder="Nova senha">
-<button>Salvar</button>
-<a href="/admin/excluir/{{u.id}}">Excluir</a>
-</td>
-</form>
-</tr>
-{% endfor %}
+    <div class="navbar">
+        <h1>Gerenciar Usuários</h1>
+        <a href="/logout" class="logout-btn">Logout</a>
+    </div>
 
-</table>
+    <div class="content">
+
+        {% for u in usuarios %}
+        <div class="card">
+
+            <form method="POST" action="/admin/editar/{{ u.id }}">
+
+                <h3>ID {{ u.id }}</h3>
+
+                <label>Nome</label>
+                <input type="text" name="nome" value="{{ u.nome }}">
+
+                <label>Email</label>
+                <input type="email" name="email" value="{{ u.email }}">
+
+                <label>Nova Senha (opcional)</label>
+                <input type="password" name="senha" placeholder="Deixe vazio para manter">
+
+                <label>Permissão</label>
+                <select name="role">
+                    <option value="user" {% if u.role == 'user' %}selected{% endif %}>Usuário</option>
+                    <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>Admin</option>
+                </select>
+
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    <button type="submit">Salvar Alterações</button>
+
+                    {% if u.id != session["usuario_id"] %}
+                    <a href="/admin/excluir/{{ u.id }}"
+                       style="background:#ef4444; padding:12px; border-radius:8px; text-align:center; text-decoration:none; color:white;">
+                       Excluir
+                    </a>
+                    {% endif %}
+                </div>
+
+            </form>
+
+        </div>
+        {% endfor %}
+
+    </div>
+
+</div>
 
 </body>
 </html>
