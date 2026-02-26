@@ -28,9 +28,9 @@
 
     <div class="content">
 
-        <!-- FILTRO MENSAL -->
+        <!-- FILTRO -->
         <div class="card">
-            <form method="GET" style="display:flex; gap:10px; flex-wrap:wrap;">
+            <form method="GET">
                 <select name="mes">
                     <option value="">Mês</option>
                     {% for i in range(1,13) %}
@@ -50,10 +50,7 @@
                 </select>
 
                 <button type="submit">Filtrar</button>
-
-                <a href="/dashboard">
-                    <button type="button">Limpar</button>
-                </a>
+                <a href="/dashboard"><button type="button">Limpar</button></a>
             </form>
         </div>
 
@@ -71,7 +68,7 @@
 
             <div class="card">
                 <h3>Saldo Atual</h3>
-                <div class="stat {% if saldo < 0 %}red{% else %}green{% endif %}">
+                <div class="stat">
                     {{ saldo | brl }}
                 </div>
             </div>
@@ -79,6 +76,7 @@
 
         <!-- META -->
         <div class="grid">
+
             <div class="card">
                 <h3>Definir Meta (%)</h3>
                 <form method="POST">
@@ -95,18 +93,18 @@
                 <h3>Meta Atual</h3>
                 <div class="stat">{{ meta_valor | brl }}</div>
 
-                <div style="background:#2c3e50; border-radius:10px; height:12px; margin-top:10px;">
-                    <div style="
-                        width: {{ percentual_usado if percentual_usado <= 100 else 100 }}%;
-                        height:100%;
-                        border-radius:10px;
-                        background: {% if percentual_usado > 100 %}#ef4444{% else %}#22c55e{% endif %};
-                        transition:0.4s;">
+                <div class="meta-bar">
+                    <div class="meta-progress"
+                         style="
+                            width: {{ percentual_usado if percentual_usado <= 100 else 100 }}%;
+                            background: {% if percentual_usado > 100 %}#ef4444{% else %}#22c55e{% endif %};
+                         ">
                     </div>
                 </div>
 
                 <small>{{ percentual_usado|round(1) }}% utilizado da meta</small>
             </div>
+
         </div>
 
         <!-- DEFINIR RENDA -->
@@ -140,7 +138,6 @@
                 </select>
 
                 <input type="number" step="0.01" name="valor" required>
-
                 <button type="submit">Adicionar</button>
             </form>
         </div>
@@ -171,14 +168,13 @@
 
             {% if gastos %}
                 {% for g in gastos %}
-                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                     <div>
-                        {{ g.categoria }} - {{ g.tipo }} - {{ g.data }}
+                        {{ g.categoria }} • {{ g.tipo }} • {{ g.data }}
                     </div>
                     <div>
                         {{ g.valor | brl }}
-                        <a href="/dashboard?excluir={{g.id}}"
-                           style="color:#ef4444; margin-left:10px;">
+                        <a href="/dashboard?excluir={{g.id}}" style="color:#ef4444; margin-left:10px;">
                            Excluir
                         </a>
                     </div>
@@ -198,7 +194,7 @@ const resumoTipo = {{ resumo_tipo | default([]) | tojson | safe }};
 const evolucaoMensal = {{ evolucao_mensal | default([]) | tojson | safe }};
 
 // Categoria
-if (resumoCategoria.length > 0) {
+if (Array.isArray(resumoCategoria) && resumoCategoria.length > 0) {
     new Chart(document.getElementById("graficoCategoria"), {
         type: "doughnut",
         data: {
@@ -211,8 +207,8 @@ if (resumoCategoria.length > 0) {
     });
 }
 
-// Fixo x Variável
-if (resumoTipo.length > 0) {
+// Tipo
+if (Array.isArray(resumoTipo) && resumoTipo.length > 0) {
     new Chart(document.getElementById("graficoTipo"), {
         type: "pie",
         data: {
@@ -226,7 +222,7 @@ if (resumoTipo.length > 0) {
 }
 
 // Evolução
-if (evolucaoMensal.length > 0) {
+if (Array.isArray(evolucaoMensal) && evolucaoMensal.length > 0) {
     new Chart(document.getElementById("graficoMensal"), {
         type: "line",
         data: {
