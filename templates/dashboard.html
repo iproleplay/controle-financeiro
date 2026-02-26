@@ -6,105 +6,73 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-*{box-sizing:border-box;}
+*{
+    box-sizing:border-box;
+}
 
 body{
     background:#0f172a;
-    color:#ffffff;
+    color:#e2e8f0;
     font-family:Inter, Arial, sans-serif;
     margin:0;
     padding:30px;
 }
 
+/* TÍTULO */
 h1{
     text-align:center;
-    margin-bottom:35px;
+    margin-bottom:40px;
     font-weight:600;
+    font-size:28px;
 }
 
+/* GRID GLOBAL */
 .grid{
     display:grid;
-    grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));
     gap:25px;
-    margin-top:25px;
 }
 
+/* CARDS */
 .card{
     background:#1e293b;
     padding:25px;
     border-radius:18px;
     border:1px solid rgba(255,255,255,0.05);
-    box-shadow:0 20px 50px rgba(0,0,0,0.45);
-    transition:0.3s ease;
+    box-shadow:0 15px 35px rgba(0,0,0,0.35);
 }
 
-.card:hover{
-    transform:translateY(-5px);
-    box-shadow:0 25px 60px rgba(0,0,0,0.55);
-}
-
-input,select{
-    width:100%;
-    padding:12px;
-    margin-bottom:12px;
-    border-radius:10px;
-    border:1px solid rgba(255,255,255,0.06);
-    background:#334155;
-    color:white;
-    font-size:14px;
-}
-
-input:focus,select:focus{
-    outline:none;
-    border-color:#3b82f6;
-}
-
-button{
-    width:100%;
-    padding:12px;
-    border-radius:10px;
-    border:none;
-    background:#3b82f6;
-    color:white;
-    font-weight:600;
-    cursor:pointer;
-    transition:0.2s;
-}
-
-button:hover{
-    background:#2563eb;
-    transform:translateY(-2px);
-}
-
+/* RESUMO SUPERIOR */
 .resumo-topo{
     display:grid;
-    grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
-    gap:20px;
+    grid-template-columns:repeat(auto-fit, minmax(220px,1fr));
+    gap:25px;
     margin-bottom:35px;
 }
 
 .resumo-box{
     background:#1e293b;
-    padding:22px;
-    border-radius:16px;
-    border:1px solid rgba(255,255,255,0.05);
+    padding:25px;
+    border-radius:18px;
     text-align:center;
+    border:1px solid rgba(255,255,255,0.05);
 }
 
 .resumo-box h4{
-    color:#94a3b8;
+    opacity:0.7;
     margin-bottom:10px;
+    font-weight:500;
 }
 
 .resumo-box p{
-    font-size:18px;
+    font-size:20px;
     font-weight:600;
 }
 
+/* PROGRESS */
 .progress{
     background:#334155;
     border-radius:30px;
-    height:18px;
+    height:14px;
     margin-top:12px;
     overflow:hidden;
 }
@@ -116,40 +84,69 @@ button:hover{
 
 .meta-text{
     font-size:12px;
-    color:#94a3b8;
     margin-top:6px;
+    opacity:0.7;
 }
 
+/* FORM */
+input,select{
+    width:100%;
+    padding:14px;
+    border-radius:12px;
+    border:1px solid rgba(255,255,255,0.08);
+    background:#334155;
+    color:white;
+    font-size:14px;
+    margin-bottom:14px;
+}
+
+input:focus, select:focus{
+    outline:none;
+    border-color:#3b82f6;
+}
+
+button{
+    width:100%;
+    padding:14px;
+    border-radius:12px;
+    border:none;
+    background:linear-gradient(90deg,#3b82f6,#2563eb);
+    color:white;
+    font-weight:600;
+    cursor:pointer;
+    transition:0.2s ease;
+}
+
+button:hover{
+    transform:translateY(-2px);
+    opacity:0.95;
+}
+
+/* LISTA GASTOS */
 .gasto-item{
     background:#334155;
-    padding:16px;
-    border-radius:12px;
-    margin-bottom:12px;
-    border:1px solid rgba(255,255,255,0.05);
+    padding:18px;
+    border-radius:14px;
+    margin-bottom:14px;
     display:flex;
     justify-content:space-between;
     align-items:center;
     flex-wrap:wrap;
-    transition:0.2s;
 }
 
-.gasto-item:hover{
-    background:#3f4f65;
-}
-
-.gasto-info small{
-    color:#94a3b8;
+.gasto-info{
+    display:flex;
+    flex-direction:column;
 }
 
 .red{color:#ef4444;}
 .green{color:#22c55e;}
 
-canvas{
-    max-height:320px;
-}
-
-@media(max-width:600px){
-    body{padding:15px;}
+/* RESPONSIVO */
+@media(max-width:768px){
+    body{
+        padding:18px;
+    }
 }
 </style>
 </head>
@@ -160,30 +157,6 @@ canvas{
 {% set total_gasto = renda_mensal - saldo %}
 {% set meta = renda_mensal * 0.7 %}
 {% set percentual_meta = (total_gasto/meta*100) if meta>0 else 0 %}
-
-<!-- FILTROS -->
-<div class="card">
-<form method="GET" class="grid">
-<select name="mes">
-<option value="">Todos os meses</option>
-{% for i in range(1,13) %}
-<option value="{{i}}">Mês {{i}}</option>
-{% endfor %}
-</select>
-
-<select name="categoria">
-<option value="">Todas categorias</option>
-<option>Aluguel</option>
-<option>Energia</option>
-<option>Internet</option>
-<option>Cartão</option>
-<option>Mercado</option>
-<option>Outros</option>
-</select>
-
-<button type="submit">Filtrar</button>
-</form>
-</div>
 
 <!-- RESUMO -->
 <div class="resumo-topo">
@@ -221,13 +194,13 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 </div>
 
 <!-- FORMULÁRIOS -->
-<div class="grid">
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); margin-bottom:35px;">
 
 <div class="card">
 <h3>💰 Definir Renda</h3>
 <form method="POST">
 <input type="hidden" name="tipo" value="renda">
-<input type="number" step="0.01" name="renda" placeholder="Digite sua renda mensal" required>
+<input type="number" step="0.01" name="renda" placeholder="Digite sua renda mensal">
 <button>Salvar</button>
 </form>
 </div>
@@ -236,9 +209,9 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 <h3>➕ Adicionar Gasto</h3>
 <form method="POST">
 <input type="hidden" name="tipo" value="gasto">
-<input type="text" name="descricao" placeholder="Descrição" required>
-<input type="number" step="0.01" name="valor" placeholder="Valor" required>
-<select name="categoria" required>
+<input type="text" name="descricao" placeholder="Descrição">
+<input type="number" step="0.01" name="valor" placeholder="Valor">
+<select name="categoria">
 <option>Aluguel</option>
 <option>Energia</option>
 <option>Internet</option>
@@ -252,23 +225,8 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 
 </div>
 
-<!-- GRÁFICOS -->
-<div class="grid">
-
-<div class="card">
-<h3>🎯 Gastos por Categoria</h3>
-<canvas id="graficoCategoria"></canvas>
-</div>
-
-<div class="card">
-<h3>📈 Evolução Mensal</h3>
-<canvas id="graficoMensal"></canvas>
-</div>
-
-</div>
-
 <!-- LISTA -->
-<div class="card" style="margin-top:25px;">
+<div class="card">
 <h3>🧾 Lista de Gastos</h3>
 
 {% if gastos %}
@@ -278,58 +236,16 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 <strong>{{ g.descricao }}</strong>
 <small>{{ g.categoria }} - {{ g.data }}</small>
 </div>
-
 <div>
-<span>{{ g.valor | brl }}</span>
-<a href="/dashboard?excluir={{g.id}}" style="color:#ef4444; margin-left:10px;">Excluir</a>
+{{ g.valor | brl }}
 </div>
 </div>
 {% endfor %}
 {% else %}
-<p style="color:#94a3b8;">Nenhum gasto registrado.</p>
+<p>Nenhum gasto registrado.</p>
 {% endif %}
 
 </div>
 
-<script>
-const resumoCategoria = {{ resumo_categoria | tojson }};
-const evolucaoMensal = {{ evolucao_mensal | tojson }};
-
-new Chart(document.getElementById("graficoCategoria"),{
-type:"doughnut",
-data:{
-labels:resumoCategoria.map(i=>i[0]),
-datasets:[{
-data:resumoCategoria.map(i=>i[1]),
-backgroundColor:["#ef4444","#3b82f6","#22c55e","#facc15","#a855f7","#f97316"]
-}]
-}
-});
-
-new Chart(document.getElementById("graficoMensal"),{
-type:"line",
-data:{
-labels:evolucaoMensal.map(i=>i[0]),
-datasets:[{
-label:"Total por Mês",
-data:evolucaoMensal.map(i=>i[1]),
-borderColor:"#3b82f6",
-tension:0.4,
-fill:false
-}]
-}
-});
-</script>
-
 </body>
 </html>
-
-<style>
-body{
-    background:#0f172a;
-    color:white;
-    font-family:Inter, Arial, sans-serif;
-    margin:0;
-    padding:24px;
-}
-</style>
