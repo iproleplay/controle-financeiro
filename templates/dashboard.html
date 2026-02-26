@@ -6,9 +6,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-*{
-    box-sizing:border-box;
-}
+*{box-sizing:border-box;}
 
 body{
     background:#0f172a;
@@ -18,7 +16,6 @@ body{
     padding:30px;
 }
 
-/* TÍTULO */
 h1{
     text-align:center;
     margin-bottom:40px;
@@ -26,13 +23,8 @@ h1{
     font-size:28px;
 }
 
-/* GRID GLOBAL */
-.grid{
-    display:grid;
-    gap:25px;
-}
+.grid{display:grid; gap:25px;}
 
-/* CARDS */
 .card{
     background:#1e293b;
     padding:25px;
@@ -41,7 +33,6 @@ h1{
     box-shadow:0 15px 35px rgba(0,0,0,0.35);
 }
 
-/* RESUMO SUPERIOR */
 .resumo-topo{
     display:grid;
     grid-template-columns:repeat(auto-fit, minmax(220px,1fr));
@@ -68,7 +59,6 @@ h1{
     font-weight:600;
 }
 
-/* PROGRESS */
 .progress{
     background:#334155;
     border-radius:30px;
@@ -88,7 +78,6 @@ h1{
     opacity:0.7;
 }
 
-/* FORM */
 input,select{
     width:100%;
     padding:14px;
@@ -122,7 +111,6 @@ button:hover{
     opacity:0.95;
 }
 
-/* LISTA GASTOS */
 .gasto-item{
     background:#334155;
     padding:18px;
@@ -134,19 +122,15 @@ button:hover{
     flex-wrap:wrap;
 }
 
-.gasto-info{
-    display:flex;
-    flex-direction:column;
-}
+.gasto-info{display:flex; flex-direction:column;}
 
 .red{color:#ef4444;}
 .green{color:#22c55e;}
 
-/* RESPONSIVO */
+canvas{max-height:320px;}
+
 @media(max-width:768px){
-    body{
-        padding:18px;
-    }
+    body{padding:18px;}
 }
 </style>
 </head>
@@ -225,6 +209,21 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 
 </div>
 
+<!-- GRÁFICOS -->
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); margin-bottom:35px;">
+
+<div class="card">
+<h3>🎯 Gastos por Categoria</h3>
+<canvas id="graficoCategoria"></canvas>
+</div>
+
+<div class="card">
+<h3>📈 Evolução Mensal</h3>
+<canvas id="graficoMensal"></canvas>
+</div>
+
+</div>
+
 <!-- LISTA -->
 <div class="card">
 <h3>🧾 Lista de Gastos</h3>
@@ -236,9 +235,7 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 <strong>{{ g.descricao }}</strong>
 <small>{{ g.categoria }} - {{ g.data }}</small>
 </div>
-<div>
-{{ g.valor | brl }}
-</div>
+<div>{{ g.valor | brl }}</div>
 </div>
 {% endfor %}
 {% else %}
@@ -246,6 +243,40 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 {% endif %}
 
 </div>
+
+<script>
+const resumoCategoria = {{ resumo_categoria | tojson }};
+const evolucaoMensal = {{ evolucao_mensal | tojson }};
+
+if(resumoCategoria.length > 0){
+    new Chart(document.getElementById("graficoCategoria"),{
+        type:"doughnut",
+        data:{
+            labels:resumoCategoria.map(i=>i[0]),
+            datasets:[{
+                data:resumoCategoria.map(i=>i[1]),
+                backgroundColor:["#ef4444","#3b82f6","#facc15","#22c55e","#a855f7","#f97316"]
+            }]
+        }
+    });
+}
+
+if(evolucaoMensal.length > 0){
+    new Chart(document.getElementById("graficoMensal"),{
+        type:"line",
+        data:{
+            labels:evolucaoMensal.map(i=>i[0]),
+            datasets:[{
+                label:"Total por Mês",
+                data:evolucaoMensal.map(i=>i[1]),
+                borderColor:"#3b82f6",
+                tension:0.3,
+                fill:false
+            }]
+        }
+    });
+}
+</script>
 
 </body>
 </html>
