@@ -54,24 +54,31 @@
             </form>
         </div>
 
-        <!-- RESUMO -->
+        <!-- RESUMO KPI -->
         <div class="grid">
+
             <div class="card">
                 <h3>Renda Mensal</h3>
-                <div class="stat">{{ renda_mensal | brl }}</div>
+                <div class="stat">
+                    {{ renda_mensal | brl }}
+                </div>
             </div>
 
             <div class="card">
                 <h3>Total de Gastos</h3>
-                <div class="stat">{{ (renda_mensal - saldo) | brl }}</div>
+                <div class="stat">
+                    {{ (renda_mensal - saldo) | brl }}
+                </div>
             </div>
 
             <div class="card">
                 <h3>Saldo Atual</h3>
-                <div class="stat">
+                <div class="stat"
+                     style="color: {{ '#22c55e' if saldo >= 0 else '#ef4444' }}">
                     {{ saldo | brl }}
                 </div>
             </div>
+
         </div>
 
         <!-- META -->
@@ -91,18 +98,22 @@
 
             <div class="card">
                 <h3>Meta Atual</h3>
-                <div class="stat">{{ meta_valor | brl }}</div>
+                <div class="stat">
+                    {{ meta_valor | brl }}
+                </div>
 
                 <div class="meta-bar">
                     <div class="meta-progress"
                          style="
                             width: {{ percentual_usado if percentual_usado <= 100 else 100 }}%;
-                            background: {% if percentual_usado > 100 %}#ef4444{% else %}#22c55e{% endif %};
+                            background: {{ '#ef4444' if percentual_usado > 100 else '#22c55e' }};
                          ">
                     </div>
                 </div>
 
-                <small>{{ percentual_usado|round(1) }}% utilizado da meta</small>
+                <small style="opacity:0.7;">
+                    {{ percentual_usado|round(1) }}% utilizado da meta
+                </small>
             </div>
 
         </div>
@@ -138,6 +149,7 @@
                 </select>
 
                 <input type="number" step="0.01" name="valor" required>
+
                 <button type="submit">Adicionar</button>
             </form>
         </div>
@@ -174,7 +186,8 @@
                     </div>
                     <div>
                         {{ g.valor | brl }}
-                        <a href="/dashboard?excluir={{g.id}}" style="color:#ef4444; margin-left:10px;">
+                        <a href="/dashboard?excluir={{g.id}}"
+                           style="color:#ef4444; margin-left:10px;">
                            Excluir
                         </a>
                     </div>
