@@ -23,7 +23,10 @@ h1{
     font-size:28px;
 }
 
-.grid{display:grid; gap:25px;}
+.grid{
+    display:grid;
+    gap:25px;
+}
 
 .card{
     background:#1e293b;
@@ -51,7 +54,6 @@ h1{
 .resumo-box h4{
     opacity:0.7;
     margin-bottom:10px;
-    font-weight:500;
 }
 
 .resumo-box p{
@@ -184,7 +186,7 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 <h3>💰 Definir Renda Mensal</h3>
 <form method="POST">
 <input type="hidden" name="tipo" value="renda">
-<input type="number" step="0.01" name="renda" placeholder="Digite sua renda">
+<input type="number" step="0.01" name="renda" placeholder="Digite sua renda" required>
 <button>Salvar</button>
 </form>
 </div>
@@ -193,9 +195,10 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 <h3>⭐ Contas Prioritárias</h3>
 <form method="POST">
 <input type="hidden" name="tipo" value="gasto">
-<input type="text" name="descricao" placeholder="Descrição da conta">
-<input type="number" step="0.01" name="valor" placeholder="Valor">
-<select name="categoria">
+
+<input type="number" step="0.01" name="valor" placeholder="Valor da conta" required>
+
+<select name="categoria" required>
 <option>Aluguel</option>
 <option>Energia</option>
 <option>Internet</option>
@@ -203,6 +206,7 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 <option>Mercado</option>
 <option>Outros</option>
 </select>
+
 <button>Adicionar Conta</button>
 </form>
 </div>
@@ -232,8 +236,8 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 {% for g in gastos %}
 <div class="gasto-item">
 <div class="gasto-info">
-<strong>{{ g.descricao }}</strong>
-<small>{{ g.categoria }} - {{ g.data }}</small>
+<strong>{{ g.categoria }}</strong>
+<small>{{ g.data }}</small>
 </div>
 <div>{{ g.valor | brl }}</div>
 </div>
@@ -248,7 +252,7 @@ style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_met
 const resumoCategoria = {{ resumo_categoria | tojson | safe }};
 const evolucaoMensal = {{ evolucao_mensal | tojson | safe }};
 
-if(resumoCategoria && resumoCategoria.length > 0){
+if(Array.isArray(resumoCategoria) && resumoCategoria.length > 0){
     new Chart(document.getElementById("graficoCategoria"),{
         type:"doughnut",
         data:{
@@ -261,7 +265,7 @@ if(resumoCategoria && resumoCategoria.length > 0){
     });
 }
 
-if(evolucaoMensal && evolucaoMensal.length > 0){
+if(Array.isArray(evolucaoMensal) && evolucaoMensal.length > 0){
     new Chart(document.getElementById("graficoMensal"),{
         type:"line",
         data:{
