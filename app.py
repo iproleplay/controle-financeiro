@@ -80,8 +80,10 @@ def login():
 
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM usuarios WHERE email=%s",
-                           (request.form.get("email"),))
+            cursor.execute(
+                "SELECT * FROM usuarios WHERE email=%s",
+                (request.form.get("email"),)
+            )
             user = cursor.fetchone()
             conn.close()
 
@@ -244,16 +246,26 @@ def dashboard():
             {filtro_sql}
             GROUP BY categoria
         """, tuple(params))
-        resumo_categoria = [(r["categoria"], float(r["total"])) for r in cursor.fetchall()]
+        resumo_categoria = [
+            (r["categoria"], float(r["total"])) 
+            for r in cursor.fetchall()
+        ]
 
         # ================= RESUMO FIXO VS VARIÁVEL =================
-        cursor.execute("""
-            SELECT tipo, SUM(valor) as total
+        cursor.execute(f"""
+            SELECT 
+                COALESCE(tipo, 'Variável') as tipo,
+                SUM(valor) as total
             FROM gastos
             WHERE usuario_id=%s
-            GROUP BY tipo
-        """, (usuario_id,))
-        resumo_tipo = [(r["tipo"], float(r["total"])) for r in cursor.fetchall()]
+            {filtro_sql}
+            GROUP BY COALESCE(tipo, 'Variável')
+        """, tuple(params))
+
+        resumo_tipo = [
+            (r["tipo"], float(r["total"])) 
+            for r in cursor.fetchall()
+        ]
 
         # ================= EVOLUÇÃO MENSAL =================
         cursor.execute("""
@@ -264,6 +276,7 @@ def dashboard():
             ORDER BY mes
         """, (usuario_id,))
         evolucao_mensal = []
+
         meses_pt = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
 
         for row in cursor.fetchall():
