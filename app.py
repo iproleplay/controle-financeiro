@@ -40,6 +40,7 @@ def brl(valor):
 # ================= LOGIN =================
 @app.route("/", methods=["GET", "POST"])
 def login():
+
     if request.method == "POST":
 
         conn = get_connection()
@@ -68,6 +69,7 @@ def login():
 # ================= CADASTRO =================
 @app.route("/cadastro", methods=["GET", "POST"])
 def cadastro():
+
     if request.method == "POST":
 
         conn = get_connection()
@@ -251,6 +253,68 @@ def admin():
     return render_template("admin.html", usuarios=usuarios)
 
 
+# ================= EDITAR USUÁRIO =================
+@app.route("/admin/editar/<int:user_id>", methods=["POST"])
+def editar_usuario(user_id):
+
+    if session.get("role") != "admin":
+        return "Acesso negado."
+
+    conn = get_connection()
+    if not conn:
+        return "Erro conexão"
+
+    cursor = conn.cursor()
+
+    nome = request.form.get("nome")
+    email = request.form.get("email")
+    senha = request.form.get("senha")
+    role = request.form.get("role")
+
+    if senha:
+        senha_hash = generate_password_hash(senha)
+        cursor.execute("""
+            UPDATE usuarios
+            SET nome=%s, email=%s, senha=%s, role=%s
+            WHERE id=%s
+        """, (nome, email, senha_hash, role, user_id))
+    else:
+        cursor.execute("""
+            UPDATE usuarios
+            SET nome=%s, email=%s, role=%s
+            WHERE id=%s
+        """, (nome, email, role, user_id))
+
+    conn.commit()
+    conn.close()
+
+    return redirect("/admin")
+
+
+# ================= EXCLUIR USUÁRIO =================
+@app.route("/admin/excluir/<int:user_id>")
+def excluir_usuario(user_id):
+
+    if session.get("role") != "admin":
+        return "Acesso negado."
+
+    if user_id == session.get("usuario_id"):
+        return "Você não pode excluir seu próprio usuário."
+
+    conn = get_connection()
+    if not conn:
+        return "Erro conexão"
+
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM gastos WHERE usuario_id=%s", (user_id,))
+    cursor.execute("DELETE FROM usuarios WHERE id=%s", (user_id,))
+
+    conn.commit()
+    conn.close()
+
+    return redirect("/admin")
+
+
 # ================= DASHBOARD ADMIN =================
 @app.route("/admin/dashboard")
 def admin_dashboard():
@@ -303,3 +367,9 @@ def admin_dashboard():
 def logout():
     session.clear()
     return redirect("/")
+
+
+# ================= START LOCAL =================
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
