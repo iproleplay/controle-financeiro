@@ -12,10 +12,17 @@
 
 <div class="sidebar">
     <h2>💰 Meu Painel</h2>
-    <a href="/dashboard">Dashboard</a>
+
+    <a href="/dashboard"
+       class="{% if request.path == '/dashboard' %}active{% endif %}">
+       Dashboard
+    </a>
 
     {% if session.get("role") == "admin" %}
-    <a href="/admin">Gerenciar Usuários</a>
+    <a href="/admin"
+       class="{% if request.path == '/admin' %}active{% endif %}">
+       Gerenciar Usuários
+    </a>
     {% endif %}
 </div>
 
@@ -54,7 +61,7 @@
             </form>
         </div>
 
-        <!-- RESUMO KPI -->
+        <!-- KPI -->
         <div class="grid">
 
             <div class="card">
@@ -118,7 +125,7 @@
 
         </div>
 
-        <!-- DEFINIR RENDA -->
+        <!-- RENDA -->
         <div class="card">
             <h3>Definir Renda Mensal</h3>
             <form method="POST">
@@ -128,7 +135,7 @@
             </form>
         </div>
 
-        <!-- ADICIONAR CONTA -->
+        <!-- NOVO GASTO -->
         <div class="card">
             <h3>Adicionar Conta</h3>
             <form method="POST">
@@ -174,23 +181,36 @@
 
         </div>
 
-        <!-- LISTA -->
+        <!-- LISTA PROFISSIONAL -->
         <div class="card">
             <h3>Contas Registradas</h3>
 
             {% if gastos %}
                 {% for g in gastos %}
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                    <div>
-                        {{ g.categoria }} • {{ g.tipo }} • {{ g.data }}
+                <div class="item-linha">
+
+                    <div class="item-info">
+                        <strong>{{ g.categoria }}</strong>
+
+                        <span class="badge 
+                            {% if g.tipo == 'Fixa' %}
+                                badge-fixa
+                            {% else %}
+                                badge-variavel
+                            {% endif %}">
+                            {{ g.tipo }}
+                        </span>
+
+                        <small>{{ g.data }}</small>
                     </div>
-                    <div>
+
+                    <div class="item-valor">
                         {{ g.valor | brl }}
-                        <a href="/dashboard?excluir={{g.id}}"
-                           style="color:#ef4444; margin-left:10px;">
-                           Excluir
+                        <a href="/dashboard?excluir={{g.id}}" class="excluir">
+                            Excluir
                         </a>
                     </div>
+
                 </div>
                 {% endfor %}
             {% else %}
@@ -228,7 +248,7 @@ if (Array.isArray(resumoTipo) && resumoTipo.length > 0) {
             labels: resumoTipo.map(i => i[0]),
             datasets: [{
                 data: resumoTipo.map(i => i[1]),
-                backgroundColor: ["#3b82f6", "#ef4444"]
+                backgroundColor: ["#3b82f6","#ef4444"]
             }]
         }
     });
