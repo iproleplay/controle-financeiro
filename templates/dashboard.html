@@ -3,256 +3,139 @@
 <head>
 <meta charset="UTF-8">
 <title>Dashboard</title>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<style>
-*{box-sizing:border-box;}
-
-body{
-    background:#0f172a;
-    color:#e2e8f0;
-    font-family:Inter, Arial, sans-serif;
-    margin:0;
-    padding:30px;
-}
-
-h1{
-    text-align:center;
-    margin-bottom:40px;
-    font-weight:600;
-    font-size:28px;
-}
-
-.grid{
-    display:grid;
-    gap:25px;
-}
-
-.card{
-    background:#1e293b;
-    padding:25px;
-    border-radius:18px;
-    border:1px solid rgba(255,255,255,0.05);
-    box-shadow:0 15px 35px rgba(0,0,0,0.35);
-}
-
-.resumo-topo{
-    display:grid;
-    grid-template-columns:repeat(auto-fit, minmax(220px,1fr));
-    gap:25px;
-    margin-bottom:35px;
-}
-
-.resumo-box{
-    background:#1e293b;
-    padding:25px;
-    border-radius:18px;
-    text-align:center;
-    border:1px solid rgba(255,255,255,0.05);
-}
-
-.resumo-box h4{
-    opacity:0.7;
-    margin-bottom:10px;
-}
-
-.resumo-box p{
-    font-size:20px;
-    font-weight:600;
-}
-
-.progress{
-    background:#334155;
-    border-radius:30px;
-    height:14px;
-    margin-top:12px;
-    overflow:hidden;
-}
-
-.progress-bar{
-    height:100%;
-    transition:width 0.6s ease;
-}
-
-.meta-text{
-    font-size:12px;
-    margin-top:6px;
-    opacity:0.7;
-}
-
-input,select{
-    width:100%;
-    padding:14px;
-    border-radius:12px;
-    border:1px solid rgba(255,255,255,0.08);
-    background:#334155;
-    color:white;
-    font-size:14px;
-    margin-bottom:14px;
-}
-
-button{
-    width:100%;
-    padding:14px;
-    border-radius:12px;
-    border:none;
-    background:linear-gradient(90deg,#3b82f6,#2563eb);
-    color:white;
-    font-weight:600;
-    cursor:pointer;
-    transition:0.2s ease;
-}
-
-button:hover{
-    transform:translateY(-2px);
-    opacity:0.95;
-}
-
-.gasto-item{
-    background:#334155;
-    padding:18px;
-    border-radius:14px;
-    margin-bottom:14px;
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    flex-wrap:wrap;
-}
-
-.gasto-info{
-    display:flex;
-    flex-direction:column;
-}
-
-.red{color:#ef4444;}
-.green{color:#22c55e;}
-
-canvas{
-    max-height:300px;
-}
-
-@media(max-width:768px){
-    body{padding:18px;}
-}
-</style>
 </head>
+
 <body>
 
-<h1>📊 Dashboard Financeiro</h1>
+<div class="sidebar">
+    <h2>💰 Meu Painel</h2>
+    <a href="/dashboard">Dashboard</a>
 
-{% set total_gasto = renda_mensal - saldo %}
-{% set meta = renda_mensal * 0.7 %}
-{% set percentual_meta = (total_gasto/meta*100) if meta>0 else 0 %}
-
-<!-- RESUMO -->
-<div class="resumo-topo">
-
-<div class="resumo-box">
-<h4>Renda</h4>
-<p>{{ renda_mensal | brl }}</p>
-</div>
-
-<div class="resumo-box">
-<h4>Total Gastos</h4>
-<p>{{ total_gasto | brl }}</p>
-</div>
-
-<div class="resumo-box">
-<h4>Saldo</h4>
-<p class="{{ 'red' if saldo < 0 else 'green' }}">
-{{ saldo | brl }}
-</p>
-</div>
-
-<div class="resumo-box">
-<h4>Meta 70%</h4>
-<p>{{ meta | brl }}</p>
-<div class="progress">
-<div class="progress-bar"
-style="width: {{ percentual_meta }}%; background: {{ '#ef4444' if percentual_meta>100 else '#22c55e' }}">
-</div>
-</div>
-<div class="meta-text">
-{{ "%.1f"|format(percentual_meta) }}% da meta utilizada
-</div>
-</div>
+    {% if session.get("role") == "admin" %}
+    <a href="/admin/dashboard">Admin Dashboard</a>
+    <a href="/admin">Gerenciar Usuários</a>
+    {% endif %}
 
 </div>
 
-<!-- FORMULÁRIOS -->
-<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); margin-bottom:35px;">
+<div class="main">
 
-<div class="card">
-<h3>💰 Definir Renda Mensal</h3>
-<form method="POST">
-<input type="hidden" name="tipo" value="renda">
-<input type="number" step="0.01" name="renda" placeholder="Digite sua renda" required>
-<button>Salvar</button>
-</form>
+    <div class="navbar">
+        <h1>Bem-vindo, {{ nome }}</h1>
+        <a href="/logout" class="logout-btn">Logout</a>
+    </div>
+
+    <div class="content">
+
+        <!-- RESUMO -->
+        <div class="grid">
+
+            <div class="card">
+                <h3>Renda Mensal</h3>
+                <div class="stat">{{ renda_mensal | brl }}</div>
+            </div>
+
+            <div class="card">
+                <h3>Total de Gastos</h3>
+                <div class="stat">
+                    {{ (renda_mensal - saldo) | brl }}
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Saldo Atual</h3>
+                <div class="stat {% if saldo < 0 %}red{% else %}green{% endif %}">
+                    {{ saldo | brl }}
+                </div>
+            </div>
+
+        </div>
+
+
+        <!-- DEFINIR RENDA -->
+        <div class="card">
+            <h3>Definir Renda Mensal</h3>
+            <form method="POST">
+                <input type="hidden" name="tipo" value="renda">
+                <input type="number" step="0.01" name="renda" placeholder="Digite sua renda">
+                <button type="submit">Salvar</button>
+            </form>
+        </div>
+
+
+        <!-- CONTAS PRIORITÁRIAS -->
+        <div class="card">
+            <h3>Adicionar Conta</h3>
+            <form method="POST">
+                <input type="hidden" name="tipo" value="gasto">
+
+                <select name="categoria">
+                    <option>Aluguel</option>
+                    <option>Energia</option>
+                    <option>Internet</option>
+                    <option>Cartão</option>
+                    <option>Mercado</option>
+                    <option>Outros</option>
+                </select>
+
+                <input type="number" step="0.01" name="valor" placeholder="Valor">
+
+                <button type="submit">Adicionar</button>
+            </form>
+        </div>
+
+
+        <!-- GRÁFICOS -->
+        <div class="grid">
+
+            <div class="card">
+                <h3>Distribuição por Categoria</h3>
+                <canvas id="graficoCategoria"></canvas>
+            </div>
+
+            <div class="card">
+                <h3>Evolução Mensal</h3>
+                <canvas id="graficoMensal"></canvas>
+            </div>
+
+        </div>
+
+
+        <!-- LISTA -->
+        <div class="card">
+            <h3>Contas Registradas</h3>
+
+            {% if gastos %}
+                {% for g in gastos %}
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <div>
+                        {{ g.categoria }} - {{ g.data }}
+                    </div>
+                    <div>
+                        {{ g.valor | brl }}
+                        <a href="/dashboard?excluir={{g.id}}"
+                           style="color:#ef4444; margin-left:10px;">Excluir</a>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p>Nenhuma conta registrada.</p>
+            {% endif %}
+        </div>
+
+    </div>
+
 </div>
 
-<div class="card">
-<h3>⭐ Contas Prioritárias</h3>
-<form method="POST">
-<input type="hidden" name="tipo" value="gasto">
-
-<input type="number" step="0.01" name="valor" placeholder="Valor da conta" required>
-
-<select name="categoria" required>
-<option>Aluguel</option>
-<option>Energia</option>
-<option>Internet</option>
-<option>Cartão</option>
-<option>Mercado</option>
-<option>Outros</option>
-</select>
-
-<button>Adicionar Conta</button>
-</form>
-</div>
-
-</div>
-
-<!-- GRÁFICOS -->
-<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); margin-bottom:35px;">
-
-<div class="card">
-<h3>🎯 Distribuição por Categoria</h3>
-<canvas id="graficoCategoria"></canvas>
-</div>
-
-<div class="card">
-<h3>📈 Evolução Mensal</h3>
-<canvas id="graficoMensal"></canvas>
-</div>
-
-</div>
-
-<!-- LISTA -->
-<div class="card">
-<h3>🧾 Contas Registradas</h3>
-
-{% if gastos %}
-{% for g in gastos %}
-<div class="gasto-item">
-<div class="gasto-info">
-<strong>{{ g.categoria }}</strong>
-<small>{{ g.data }}</small>
-</div>
-<div>{{ g.valor | brl }}</div>
-</div>
-{% endfor %}
-{% else %}
-<p>Nenhuma conta registrada.</p>
-{% endif %}
-
-</div>
 
 <script>
 const resumoCategoria = {{ resumo_categoria | tojson | safe }};
 const evolucaoMensal = {{ evolucao_mensal | tojson | safe }};
 
-if(Array.isArray(resumoCategoria) && resumoCategoria.length > 0){
+if(resumoCategoria.length > 0){
     new Chart(document.getElementById("graficoCategoria"),{
         type:"doughnut",
         data:{
@@ -265,7 +148,7 @@ if(Array.isArray(resumoCategoria) && resumoCategoria.length > 0){
     });
 }
 
-if(Array.isArray(evolucaoMensal) && evolucaoMensal.length > 0){
+if(evolucaoMensal.length > 0){
     new Chart(document.getElementById("graficoMensal"),{
         type:"line",
         data:{
