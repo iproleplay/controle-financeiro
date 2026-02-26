@@ -61,6 +61,7 @@ def login():
             if user and check_password_hash(user["senha"], request.form.get("senha")):
                 session["usuario_id"] = user["id"]
                 session["nome"] = user["nome"]
+                session["role"] = user.get("role", "user")
                 return redirect("/dashboard")
             else:
                 return "Login inválido"
@@ -86,13 +87,14 @@ def cadastro():
             senha_hash = generate_password_hash(request.form.get("senha"))
 
             cursor.execute("""
-                INSERT INTO usuarios (nome, email, senha, renda_mensal)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO usuarios (nome, email, senha, renda_mensal, role)
+                VALUES (%s, %s, %s, %s, %s)
             """, (
                 request.form.get("nome"),
                 request.form.get("email"),
                 senha_hash,
-                0
+                0,
+                "user"
             ))
 
             conn.commit()
@@ -120,6 +122,19 @@ def dashboard():
     try:
         cursor = conn.cursor()
         usuario_id = session["usuario_id"]
+
+        # EXCLUIR GASTO
+        if request.args.get("excluir"):
+            cursor.execute("""
+                DELETE FROM gastos
+                WHERE id=%s AND usuario_id=%s
+            """, (
+                request.args.get("excluir"),
+                usuario_id
+            ))
+            conn.commit()
+            conn.close()
+            return redirect("/dashboard")
 
         # POST
         if request.method == "POST":
@@ -214,6 +229,58 @@ def dashboard():
 
     except Exception as e:
         return f"Erro dashboard: {e}"
+
+
+# ================= CRIAR ADMIN AUTOMÁTICO =================
+@app.route("/criar_admin")
+def criar_admin():
+
+    conn = get_connection()
+    if not conn:
+        return "Erro ao conectar ao banco."
+
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        ALTER TABLE usuarios
+        ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user';
+    """)
+
+    cursor.execute("""
+        UPDATE usuarios
+        SET role='admin'
+        WHERE email='tigersplayrole@gmail.com';
+    """)
+
+    conn.commit()
+    conn.close()
+
+    return "Admin configurado com sucesso!"
+
+
+# ================= ADMIN =================
+@app.route("/admin")
+def admin():
+
+    if session.get("role") != "admin":
+        return "Acesso negado."
+
+    conn = get_connection()
+    if not conn:
+        return "Erro ao conectar ao banco."
+
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, nome, email, role
+        FROM usuarios
+        ORDER BY id
+    """)
+
+    usuarios = cursor.fetchall()
+    conn.close()
+
+    return render_template("admin.html", usuarios=usuarios)
 
 
 # ================= LOGOUT =================
