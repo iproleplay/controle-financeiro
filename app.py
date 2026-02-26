@@ -11,6 +11,8 @@ app.secret_key = os.environ.get("SECRET_KEY", "seguro123")
 # ================= CONEXÃO =================
 def get_connection():
     DATABASE_URL = os.environ.get("DATABASE_URL")
+    if not DATABASE_URL:
+        raise Exception("DATABASE_URL não configurada.")
     return psycopg2.connect(
         DATABASE_URL,
         cursor_factory=RealDictCursor,
@@ -63,12 +65,13 @@ def cadastro():
             senha_hash = generate_password_hash(request.form.get("senha"))
 
             cursor.execute("""
-                INSERT INTO usuarios (nome, email, senha)
-                VALUES (%s, %s, %s)
+                INSERT INTO usuarios (nome, email, senha, renda_mensal)
+                VALUES (%s, %s, %s, %s)
             """, (
                 request.form.get("nome"),
                 request.form.get("email"),
-                senha_hash
+                senha_hash,
+                0
             ))
 
             conn.commit()
@@ -84,40 +87,39 @@ def cadastro():
 # ================= DASHBOARD =================
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
+
     if "usuario_id" not in session:
         return redirect("/")
 
     try:
         conn = get_connection()
         cursor = conn.cursor()
+        usuario_id = session["usuario_id"]
 
         # TRATAR POST
         if request.method == "POST":
             tipo = request.form.get("tipo")
 
-            # SALVAR RENDA
             if tipo == "renda":
                 renda = request.form.get("renda", 0)
                 cursor.execute("""
                     UPDATE usuarios
                     SET renda_mensal=%s
                     WHERE id=%s
-                """, (float(renda), session["usuario_id"]))
+                """, (float(renda), usuario_id))
                 conn.commit()
 
-            # SALVAR GASTO
             if tipo == "gasto":
-                descricao = request.form.get("descricao")
                 valor = request.form.get("valor")
                 categoria = request.form.get("categoria")
 
-                if descricao and valor:
+                if valor:
                     cursor.execute("""
                         INSERT INTO gastos (usuario_id, descricao, valor, categoria, data)
                         VALUES (%s,%s,%s,%s,%s)
                     """, (
-                        session["usuario_id"],
-                        descricao,
+                        usuario_id,
+                        categoria,
                         float(valor),
                         categoria,
                         datetime.now().date()
@@ -127,7 +129,7 @@ def dashboard():
         # BUSCAR RENDA
         cursor.execute("""
             SELECT renda_mensal FROM usuarios WHERE id=%s
-        """, (session["usuario_id"],))
+        """, (usuario_id,))
         renda_row = cursor.fetchone()
         renda_mensal = float(renda_row["renda_mensal"] or 0) if renda_row else 0
 
@@ -136,11 +138,41 @@ def dashboard():
             SELECT * FROM gastos
             WHERE usuario_id=%s
             ORDER BY data DESC
-        """, (session["usuario_id"],))
+        """, (usuario_id,))
         gastos = cursor.fetchall()
 
         total_gastos = sum(float(g["valor"]) for g in gastos) if gastos else 0
         saldo = renda_mensal - total_gastos
+
+        # ================= RESUMO POR CATEGORIA =================
+        cursor.execute("""
+            SELECT categoria, SUM(valor) as total
+            FROM gastos
+            WHERE usuario_id=%s
+            GROUP BY categoria
+        """, (usuario_id,))
+
+        resumo_categoria = [
+            (r["categoria"], float(r["total"]))
+            for r in cursor.fetchall()
+        ]
+
+        # ================= EVOLUÇÃO MENSAL =================
+        cursor.execute("""
+            SELECT DATE_TRUNC('month', data) as mes, SUM(valor) as total
+            FROM gastos
+            WHERE usuario_id=%s
+            GROUP BY mes
+            ORDER BY mes
+        """, (usuario_id,))
+
+        evolucao_mensal = []
+        meses_pt = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
+
+        for row in cursor.fetchall():
+            evolucao_mensal.append(
+                (f"{meses_pt[row['mes'].month-1]}/{row['mes'].year}", float(row["total"]))
+            )
 
         conn.close()
 
@@ -151,8 +183,8 @@ def dashboard():
             renda_mensal=renda_mensal,
             saldo=saldo,
             percentual=0,
-            resumo_categoria=[],
-            evolucao_mensal=[]
+            resumo_categoria=resumo_categoria,
+            evolucao_mensal=evolucao_mensal
         )
 
     except Exception as e:
@@ -164,7 +196,6 @@ def logout():
     session.clear()
     return redirect("/")
 
-# ================= START =================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
