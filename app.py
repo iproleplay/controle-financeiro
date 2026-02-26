@@ -35,12 +35,12 @@ def login():
 
             cursor.execute(
                 "SELECT * FROM usuarios WHERE email=%s",
-                (request.form["email"],)
+                (request.form.get("email"),)
             )
             user = cursor.fetchone()
             conn.close()
 
-            if user and check_password_hash(user["senha"], request.form["senha"]):
+            if user and check_password_hash(user["senha"], request.form.get("senha")):
                 session["usuario_id"] = user["id"]
                 session["nome"] = user["nome"]
                 return redirect("/dashboard")
@@ -60,14 +60,14 @@ def cadastro():
             conn = get_connection()
             cursor = conn.cursor()
 
-            senha_hash = generate_password_hash(request.form["senha"])
+            senha_hash = generate_password_hash(request.form.get("senha"))
 
             cursor.execute("""
                 INSERT INTO usuarios (nome, email, senha)
                 VALUES (%s, %s, %s)
             """, (
-                request.form["nome"],
-                request.form["email"],
+                request.form.get("nome"),
+                request.form.get("email"),
                 senha_hash
             ))
 
@@ -91,28 +91,56 @@ def dashboard():
         conn = get_connection()
         cursor = conn.cursor()
 
-        # INSERIR GASTO
+        # TRATAR POST
         if request.method == "POST":
-            cursor.execute("""
-                INSERT INTO gastos (usuario_id, descricao, valor, categoria, data)
-                VALUES (%s,%s,%s,%s,%s)
-            """, (
-                session["usuario_id"],
-                request.form["descricao"],
-                float(request.form["valor"]),
-                request.form["categoria"],
-                datetime.now().date()
-            ))
-            conn.commit()
+            tipo = request.form.get("tipo")
 
-        # LISTAR GASTOS
+            # SALVAR RENDA
+            if tipo == "renda":
+                renda = request.form.get("renda", 0)
+                cursor.execute("""
+                    UPDATE usuarios
+                    SET renda_mensal=%s
+                    WHERE id=%s
+                """, (float(renda), session["usuario_id"]))
+                conn.commit()
+
+            # SALVAR GASTO
+            if tipo == "gasto":
+                descricao = request.form.get("descricao")
+                valor = request.form.get("valor")
+                categoria = request.form.get("categoria")
+
+                if descricao and valor:
+                    cursor.execute("""
+                        INSERT INTO gastos (usuario_id, descricao, valor, categoria, data)
+                        VALUES (%s,%s,%s,%s,%s)
+                    """, (
+                        session["usuario_id"],
+                        descricao,
+                        float(valor),
+                        categoria,
+                        datetime.now().date()
+                    ))
+                    conn.commit()
+
+        # BUSCAR RENDA
+        cursor.execute("""
+            SELECT renda_mensal FROM usuarios WHERE id=%s
+        """, (session["usuario_id"],))
+        renda_row = cursor.fetchone()
+        renda_mensal = float(renda_row["renda_mensal"] or 0) if renda_row else 0
+
+        # BUSCAR GASTOS
         cursor.execute("""
             SELECT * FROM gastos
             WHERE usuario_id=%s
             ORDER BY data DESC
         """, (session["usuario_id"],))
-
         gastos = cursor.fetchall()
+
+        total_gastos = sum(float(g["valor"]) for g in gastos) if gastos else 0
+        saldo = renda_mensal - total_gastos
 
         conn.close()
 
@@ -120,8 +148,8 @@ def dashboard():
             "dashboard.html",
             nome=session["nome"],
             gastos=gastos,
-            renda_mensal=0,
-            saldo=0,
+            renda_mensal=renda_mensal,
+            saldo=saldo,
             percentual=0,
             resumo_categoria=[],
             evolucao_mensal=[]
