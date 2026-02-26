@@ -30,8 +30,7 @@
 
         <!-- FILTRO MENSAL -->
         <div class="card">
-            <form method="GET" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                
+            <form method="GET" style="display:flex; gap:10px; flex-wrap:wrap;">
                 <select name="mes">
                     <option value="">Mês</option>
                     {% for i in range(1,13) %}
@@ -52,17 +51,14 @@
 
                 <button type="submit">Filtrar</button>
 
-                <a href="/dashboard" style="text-decoration:none;">
+                <a href="/dashboard">
                     <button type="button">Limpar</button>
                 </a>
-
             </form>
         </div>
 
-
         <!-- RESUMO -->
         <div class="grid">
-
             <div class="card">
                 <h3>Renda Mensal</h3>
                 <div class="stat">{{ renda_mensal | brl }}</div>
@@ -70,9 +66,7 @@
 
             <div class="card">
                 <h3>Total de Gastos</h3>
-                <div class="stat">
-                    {{ (renda_mensal - saldo) | brl }}
-                </div>
+                <div class="stat">{{ (renda_mensal - saldo) | brl }}</div>
             </div>
 
             <div class="card">
@@ -81,12 +75,10 @@
                     {{ saldo | brl }}
                 </div>
             </div>
-
         </div>
 
         <!-- META -->
         <div class="grid">
-
             <div class="card">
                 <h3>Definir Meta (%)</h3>
                 <form method="POST">
@@ -115,7 +107,6 @@
 
                 <small>{{ percentual_usado|round(1) }}% utilizado da meta</small>
             </div>
-
         </div>
 
         <!-- DEFINIR RENDA -->
@@ -123,7 +114,7 @@
             <h3>Definir Renda Mensal</h3>
             <form method="POST">
                 <input type="hidden" name="tipo" value="renda">
-                <input type="number" step="0.01" name="renda" placeholder="Digite sua renda" required>
+                <input type="number" step="0.01" name="renda" required>
                 <button type="submit">Salvar</button>
             </form>
         </div>
@@ -143,7 +134,12 @@
                     <option>Outros</option>
                 </select>
 
-                <input type="number" step="0.01" name="valor" placeholder="Valor" required>
+                <select name="tipo_gasto" required>
+                    <option value="Fixa">Fixa</option>
+                    <option value="Variável" selected>Variável</option>
+                </select>
+
+                <input type="number" step="0.01" name="valor" required>
 
                 <button type="submit">Adicionar</button>
             </form>
@@ -155,6 +151,11 @@
             <div class="card">
                 <h3>Distribuição por Categoria</h3>
                 <canvas id="graficoCategoria"></canvas>
+            </div>
+
+            <div class="card">
+                <h3>Fixo x Variável</h3>
+                <canvas id="graficoTipo"></canvas>
             </div>
 
             <div class="card">
@@ -172,7 +173,7 @@
                 {% for g in gastos %}
                 <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
                     <div>
-                        {{ g.categoria }} - {{ g.data }}
+                        {{ g.categoria }} - {{ g.tipo }} - {{ g.data }}
                     </div>
                     <div>
                         {{ g.valor | brl }}
@@ -189,34 +190,43 @@
         </div>
 
     </div>
-
 </div>
 
 <script>
 const resumoCategoria = {{ resumo_categoria | default([]) | tojson | safe }};
+const resumoTipo = {{ resumo_tipo | default([]) | tojson | safe }};
 const evolucaoMensal = {{ evolucao_mensal | default([]) | tojson | safe }};
 
-if (Array.isArray(resumoCategoria) && resumoCategoria.length > 0) {
+// Categoria
+if (resumoCategoria.length > 0) {
     new Chart(document.getElementById("graficoCategoria"), {
         type: "doughnut",
         data: {
             labels: resumoCategoria.map(i => i[0]),
             datasets: [{
                 data: resumoCategoria.map(i => i[1]),
-                backgroundColor: [
-                    "#ef4444",
-                    "#3b82f6",
-                    "#facc15",
-                    "#22c55e",
-                    "#a855f7",
-                    "#f97316"
-                ]
+                backgroundColor: ["#ef4444","#3b82f6","#facc15","#22c55e","#a855f7","#f97316"]
             }]
         }
     });
 }
 
-if (Array.isArray(evolucaoMensal) && evolucaoMensal.length > 0) {
+// Fixo x Variável
+if (resumoTipo.length > 0) {
+    new Chart(document.getElementById("graficoTipo"), {
+        type: "pie",
+        data: {
+            labels: resumoTipo.map(i => i[0]),
+            datasets: [{
+                data: resumoTipo.map(i => i[1]),
+                backgroundColor: ["#3b82f6", "#ef4444"]
+            }]
+        }
+    });
+}
+
+// Evolução
+if (evolucaoMensal.length > 0) {
     new Chart(document.getElementById("graficoMensal"), {
         type: "line",
         data: {
