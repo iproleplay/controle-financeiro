@@ -8,6 +8,7 @@ from datetime import datetime
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "seguro123")
 
+# ================= CONEXÃO =================
 def get_connection():
     DATABASE_URL = os.environ.get("DATABASE_URL")
     return psycopg2.connect(
@@ -16,6 +17,14 @@ def get_connection():
         connect_timeout=5
     )
 
+# ================= FILTRO BRL =================
+@app.template_filter("brl")
+def brl(valor):
+    try:
+        return "R$ {:,.2f}".format(float(valor)).replace(",", "X").replace(".", ",").replace("X", ".")
+    except:
+        return "R$ 0,00"
+
 # ================= LOGIN =================
 @app.route("/", methods=["GET", "POST"])
 def login():
@@ -23,8 +32,11 @@ def login():
         try:
             conn = get_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM usuarios WHERE email=%s",
-                           (request.form["email"],))
+
+            cursor.execute(
+                "SELECT * FROM usuarios WHERE email=%s",
+                (request.form["email"],)
+            )
             user = cursor.fetchone()
             conn.close()
 
@@ -34,6 +46,7 @@ def login():
                 return redirect("/dashboard")
             else:
                 return "Login inválido"
+
         except Exception as e:
             return f"Erro login: {e}"
 
@@ -52,12 +65,17 @@ def cadastro():
             cursor.execute("""
                 INSERT INTO usuarios (nome, email, senha)
                 VALUES (%s, %s, %s)
-            """, (request.form["nome"], request.form["email"], senha_hash))
+            """, (
+                request.form["nome"],
+                request.form["email"],
+                senha_hash
+            ))
 
             conn.commit()
             conn.close()
 
             return redirect("/")
+
         except Exception as e:
             return f"Erro cadastro: {e}"
 
@@ -73,6 +91,7 @@ def dashboard():
         conn = get_connection()
         cursor = conn.cursor()
 
+        # INSERIR GASTO
         if request.method == "POST":
             cursor.execute("""
                 INSERT INTO gastos (usuario_id, descricao, valor, categoria, data)
@@ -86,6 +105,7 @@ def dashboard():
             ))
             conn.commit()
 
+        # LISTAR GASTOS
         cursor.execute("""
             SELECT * FROM gastos
             WHERE usuario_id=%s
@@ -116,6 +136,7 @@ def logout():
     session.clear()
     return redirect("/")
 
+# ================= START =================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
