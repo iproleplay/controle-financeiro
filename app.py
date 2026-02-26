@@ -40,7 +40,6 @@ def brl(valor):
 # ================= LOGIN =================
 @app.route("/", methods=["GET", "POST"])
 def login():
-
     if request.method == "POST":
 
         conn = get_connection()
@@ -69,7 +68,6 @@ def login():
 # ================= CADASTRO =================
 @app.route("/cadastro", methods=["GET", "POST"])
 def cadastro():
-
     if request.method == "POST":
 
         conn = get_connection()
@@ -98,7 +96,7 @@ def cadastro():
     return render_template("cadastro.html")
 
 
-# ================= DASHBOARD =================
+# ================= DASHBOARD USUÁRIO =================
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
 
@@ -168,7 +166,7 @@ def dashboard():
     total_gastos = sum(float(g["valor"]) for g in gastos) if gastos else 0
     saldo = renda_mensal - total_gastos
 
-    # RESUMO CATEGORIA
+    # RESUMO POR CATEGORIA
     cursor.execute("""
         SELECT categoria, SUM(valor) as total
         FROM gastos
@@ -234,7 +232,7 @@ def criar_admin():
     return "Admin configurado com sucesso!"
 
 
-# ================= ADMIN =================
+# ================= PAINEL ADMIN =================
 @app.route("/admin")
 def admin():
 
@@ -246,20 +244,16 @@ def admin():
         return "Erro conexão"
 
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, nome, email, role
-        FROM usuarios
-        ORDER BY id
-    """)
+    cursor.execute("SELECT id, nome, email, role FROM usuarios ORDER BY id")
     usuarios = cursor.fetchall()
     conn.close()
 
     return render_template("admin.html", usuarios=usuarios)
 
 
-# ================= EDITAR USUÁRIO =================
-@app.route("/admin/editar/<int:user_id>", methods=["POST"])
-def editar_usuario(user_id):
+# ================= DASHBOARD ADMIN =================
+@app.route("/admin/dashboard")
+def admin_dashboard():
 
     if session.get("role") != "admin":
         return "Acesso negado."
@@ -270,53 +264,38 @@ def editar_usuario(user_id):
 
     cursor = conn.cursor()
 
-    nome = request.form.get("nome")
-    email = request.form.get("email")
-    senha = request.form.get("senha")
-    role = request.form.get("role")
+    cursor.execute("SELECT COUNT(*) as total FROM usuarios")
+    total_usuarios = cursor.fetchone()["total"]
 
-    if senha:
-        senha_hash = generate_password_hash(senha)
-        cursor.execute("""
-            UPDATE usuarios
-            SET nome=%s, email=%s, senha=%s, role=%s
-            WHERE id=%s
-        """, (nome, email, senha_hash, role, user_id))
-    else:
-        cursor.execute("""
-            UPDATE usuarios
-            SET nome=%s, email=%s, role=%s
-            WHERE id=%s
-        """, (nome, email, role, user_id))
+    cursor.execute("SELECT COUNT(*) as total FROM usuarios WHERE role='admin'")
+    total_admins = cursor.fetchone()["total"]
 
-    conn.commit()
+    cursor.execute("SELECT COUNT(*) as total FROM gastos")
+    total_lancamentos = cursor.fetchone()["total"]
+
+    cursor.execute("SELECT COALESCE(SUM(valor),0) as total FROM gastos")
+    total_movimentado = float(cursor.fetchone()["total"])
+
+    cursor.execute("""
+        SELECT categoria, SUM(valor) as total
+        FROM gastos
+        GROUP BY categoria
+    """)
+    resumo_categoria = [
+        (r["categoria"], float(r["total"]))
+        for r in cursor.fetchall()
+    ]
+
     conn.close()
 
-    return redirect("/admin")
-
-
-# ================= EXCLUIR USUÁRIO =================
-@app.route("/admin/excluir/<int:user_id>")
-def excluir_usuario(user_id):
-
-    if session.get("role") != "admin":
-        return "Acesso negado."
-
-    if user_id == session.get("usuario_id"):
-        return "Você não pode excluir seu próprio usuário."
-
-    conn = get_connection()
-    if not conn:
-        return "Erro conexão"
-
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM gastos WHERE usuario_id=%s", (user_id,))
-    cursor.execute("DELETE FROM usuarios WHERE id=%s", (user_id,))
-
-    conn.commit()
-    conn.close()
-
-    return redirect("/admin")
+    return render_template(
+        "admin_dashboard.html",
+        total_usuarios=total_usuarios,
+        total_admins=total_admins,
+        total_lancamentos=total_lancamentos,
+        total_movimentado=total_movimentado,
+        resumo_categoria=resumo_categoria
+    )
 
 
 # ================= LOGOUT =================
