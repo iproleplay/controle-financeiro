@@ -18,7 +18,7 @@ def get_connection():
     return psycopg2.connect(
         DATABASE_URL,
         cursor_factory=RealDictCursor,
-        connect_timeout=5  # evita travamento infinito
+        connect_timeout=5
     )
 
 
@@ -58,6 +58,34 @@ def login():
     return render_template("login.html")
 
 
+# ================= CADASTRO =================
+@app.route("/cadastro", methods=["GET", "POST"])
+def cadastro():
+    if request.method == "POST":
+        try:
+            nome = request.form.get("nome")
+            email = request.form.get("email")
+            senha = generate_password_hash(request.form.get("senha"))
+
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                INSERT INTO usuarios (nome, email, senha)
+                VALUES (%s, %s, %s)
+            """, (nome, email, senha))
+
+            conn.commit()
+            conn.close()
+
+            return redirect("/")
+
+        except Exception as e:
+            return f"Erro ao cadastrar: {e}"
+
+    return render_template("cadastro.html")
+
+
 # ================= DASHBOARD =================
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
@@ -69,7 +97,6 @@ def dashboard():
         conn = get_connection()
         cursor = conn.cursor()
 
-        # FILTROS
         mes_filtro = request.args.get("mes")
         categoria_filtro = request.args.get("categoria")
 
@@ -84,7 +111,6 @@ def dashboard():
             filtro_sql += " AND categoria=%s"
             params.append(categoria_filtro)
 
-        # SALVAR RENDA
         if request.method == "POST" and request.form.get("tipo") == "renda":
             renda = request.form.get("renda")
             cursor.execute(
@@ -93,7 +119,6 @@ def dashboard():
             )
             conn.commit()
 
-        # SALVAR GASTO
         if request.method == "POST" and request.form.get("tipo") == "gasto":
             cursor.execute(
                 """
@@ -110,7 +135,6 @@ def dashboard():
             )
             conn.commit()
 
-        # EXCLUIR GASTO
         if request.args.get("excluir"):
             cursor.execute(
                 "DELETE FROM gastos WHERE id=%s AND usuario_id=%s",
@@ -120,12 +144,10 @@ def dashboard():
             conn.close()
             return redirect("/dashboard")
 
-        # RENDA
         cursor.execute("SELECT renda_mensal FROM usuarios WHERE id=%s", (usuario_id,))
         renda_row = cursor.fetchone()
         renda_mensal = float(renda_row["renda_mensal"] or 0) if renda_row else 0
 
-        # GASTOS
         cursor.execute(f"SELECT * FROM gastos {filtro_sql} ORDER BY data DESC", params)
         gastos = cursor.fetchall()
 
@@ -133,7 +155,6 @@ def dashboard():
         saldo = renda_mensal - total_gastos
         percentual = (total_gastos / renda_mensal * 100) if renda_mensal > 0 else 0
 
-        # RESUMO CATEGORIA
         cursor.execute(
             f"""
             SELECT categoria, SUM(valor) as total
@@ -146,7 +167,6 @@ def dashboard():
             (r["categoria"], float(r["total"])) for r in cursor.fetchall()
         ]
 
-        # EVOLUÇÃO MENSAL
         cursor.execute(
             """
             SELECT DATE_TRUNC('month', data) as mes, SUM(valor) as total
