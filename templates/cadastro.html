@@ -5,30 +5,38 @@
 <title>Criar Conta</title>
 
 <style>
+*{
+    box-sizing:border-box;
+}
+
 body{
-    background:#0f172a;
-    color:white;
-    font-family:Inter, Arial, sans-serif;
     margin:0;
-    padding:0;
+    height:100vh;
     display:flex;
     justify-content:center;
     align-items:center;
-    height:100vh;
+    background:#0f172a;
+    font-family:Inter, Arial, sans-serif;
+}
+
+.container{
+    width:100%;
+    max-width:400px;
+    padding:20px;
 }
 
 .card{
     background:#1e293b;
-    padding:40px;
+    padding:40px 30px;
     border-radius:18px;
-    width:350px;
-    box-shadow:0 20px 50px rgba(0,0,0,0.45);
     border:1px solid rgba(255,255,255,0.05);
+    box-shadow:0 20px 50px rgba(0,0,0,0.5);
 }
 
 h2{
+    color:white;
     text-align:center;
-    margin-bottom:25px;
+    margin-bottom:30px;
 }
 
 input{
@@ -36,7 +44,7 @@ input{
     padding:12px;
     margin-bottom:15px;
     border-radius:10px;
-    border:1px solid rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.05);
     background:#334155;
     color:white;
     font-size:14px;
@@ -61,13 +69,13 @@ button{
 
 button:hover{
     background:#2563eb;
-    transform:translateY(-2px);
 }
 
 .link{
     text-align:center;
-    margin-top:15px;
-    font-size:13px;
+    margin-top:20px;
+    color:#94a3b8;
+    font-size:14px;
 }
 
 .link a{
@@ -82,7 +90,9 @@ button:hover{
 </head>
 <body>
 
+<div class="container">
 <div class="card">
+
 <h2>🚀 Criar Conta</h2>
 
 <form method="POST">
@@ -94,6 +104,8 @@ button:hover{
 
 <div class="link">
 Já tem conta? <a href="/">Fazer login</a>
+</div>
+
 </div>
 </div>
 
