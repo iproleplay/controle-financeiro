@@ -18,12 +18,11 @@ def get_connection():
         return None
 
     try:
-        conn = psycopg2.connect(
+        return psycopg2.connect(
             DATABASE_URL,
             cursor_factory=RealDictCursor,
             connect_timeout=5
         )
-        return conn
     except Exception as e:
         print("Erro ao conectar no banco:", e)
         return None
@@ -48,26 +47,21 @@ def login():
         if not conn:
             return "Erro ao conectar ao banco."
 
-        try:
-            cursor = conn.cursor()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM usuarios WHERE email=%s",
+            (request.form.get("email"),)
+        )
+        user = cursor.fetchone()
+        conn.close()
 
-            cursor.execute(
-                "SELECT * FROM usuarios WHERE email=%s",
-                (request.form.get("email"),)
-            )
-            user = cursor.fetchone()
-            conn.close()
-
-            if user and check_password_hash(user["senha"], request.form.get("senha")):
-                session["usuario_id"] = user["id"]
-                session["nome"] = user["nome"]
-                session["role"] = user.get("role", "user")
-                return redirect("/dashboard")
-            else:
-                return "Login inválido"
-
-        except Exception as e:
-            return f"Erro login: {e}"
+        if user and check_password_hash(user["senha"], request.form.get("senha")):
+            session["usuario_id"] = user["id"]
+            session["nome"] = user["nome"]
+            session["role"] = user.get("role", "user")
+            return redirect("/dashboard")
+        else:
+            return "Login inválido"
 
     return render_template("login.html")
 
@@ -82,28 +76,24 @@ def cadastro():
         if not conn:
             return "Erro ao conectar ao banco."
 
-        try:
-            cursor = conn.cursor()
-            senha_hash = generate_password_hash(request.form.get("senha"))
+        cursor = conn.cursor()
+        senha_hash = generate_password_hash(request.form.get("senha"))
 
-            cursor.execute("""
-                INSERT INTO usuarios (nome, email, senha, renda_mensal, role)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (
-                request.form.get("nome"),
-                request.form.get("email"),
-                senha_hash,
-                0,
-                "user"
-            ))
+        cursor.execute("""
+            INSERT INTO usuarios (nome, email, senha, renda_mensal, role)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (
+            request.form.get("nome"),
+            request.form.get("email"),
+            senha_hash,
+            0,
+            "user"
+        ))
 
-            conn.commit()
-            conn.close()
+        conn.commit()
+        conn.close()
 
-            return redirect("/")
-
-        except Exception as e:
-            return f"Erro cadastro: {e}"
+        return redirect("/")
 
     return render_template("cadastro.html")
 
@@ -119,123 +109,111 @@ def dashboard():
     if not conn:
         return "Erro ao conectar ao banco."
 
-    try:
-        cursor = conn.cursor()
-        usuario_id = session["usuario_id"]
+    cursor = conn.cursor()
+    usuario_id = session["usuario_id"]
 
-        # EXCLUIR GASTO
-        if request.args.get("excluir"):
+    # EXCLUIR GASTO
+    if request.args.get("excluir"):
+        cursor.execute("""
+            DELETE FROM gastos
+            WHERE id=%s AND usuario_id=%s
+        """, (request.args.get("excluir"), usuario_id))
+        conn.commit()
+        conn.close()
+        return redirect("/dashboard")
+
+    # POST
+    if request.method == "POST":
+        tipo = request.form.get("tipo")
+
+        if tipo == "renda":
+            renda = request.form.get("renda", 0)
             cursor.execute("""
-                DELETE FROM gastos
-                WHERE id=%s AND usuario_id=%s
-            """, (
-                request.args.get("excluir"),
-                usuario_id
-            ))
+                UPDATE usuarios
+                SET renda_mensal=%s
+                WHERE id=%s
+            """, (float(renda), usuario_id))
             conn.commit()
-            conn.close()
-            return redirect("/dashboard")
 
-        # POST
-        if request.method == "POST":
-            tipo = request.form.get("tipo")
+        if tipo == "gasto":
+            valor = request.form.get("valor")
+            categoria = request.form.get("categoria")
 
-            if tipo == "renda":
-                renda = request.form.get("renda", 0)
+            if valor:
                 cursor.execute("""
-                    UPDATE usuarios
-                    SET renda_mensal=%s
-                    WHERE id=%s
-                """, (float(renda), usuario_id))
+                    INSERT INTO gastos (usuario_id, descricao, valor, categoria, data)
+                    VALUES (%s,%s,%s,%s,%s)
+                """, (
+                    usuario_id,
+                    categoria,
+                    float(valor),
+                    categoria,
+                    datetime.now().date()
+                ))
                 conn.commit()
 
-            if tipo == "gasto":
-                valor = request.form.get("valor")
-                categoria = request.form.get("categoria")
+    # RENDA
+    cursor.execute("SELECT renda_mensal FROM usuarios WHERE id=%s", (usuario_id,))
+    renda_row = cursor.fetchone()
+    renda_mensal = float(renda_row["renda_mensal"] or 0) if renda_row else 0
 
-                if valor:
-                    cursor.execute("""
-                        INSERT INTO gastos (usuario_id, descricao, valor, categoria, data)
-                        VALUES (%s,%s,%s,%s,%s)
-                    """, (
-                        usuario_id,
-                        categoria,
-                        float(valor),
-                        categoria,
-                        datetime.now().date()
-                    ))
-                    conn.commit()
+    # GASTOS
+    cursor.execute("""
+        SELECT * FROM gastos
+        WHERE usuario_id=%s
+        ORDER BY data DESC
+    """, (usuario_id,))
+    gastos = cursor.fetchall()
 
-        # RENDA
-        cursor.execute("SELECT renda_mensal FROM usuarios WHERE id=%s", (usuario_id,))
-        renda_row = cursor.fetchone()
-        renda_mensal = float(renda_row["renda_mensal"] or 0) if renda_row else 0
+    total_gastos = sum(float(g["valor"]) for g in gastos) if gastos else 0
+    saldo = renda_mensal - total_gastos
 
-        # GASTOS
-        cursor.execute("""
-            SELECT * FROM gastos
-            WHERE usuario_id=%s
-            ORDER BY data DESC
-        """, (usuario_id,))
-        gastos = cursor.fetchall()
+    # RESUMO CATEGORIA
+    cursor.execute("""
+        SELECT categoria, SUM(valor) as total
+        FROM gastos
+        WHERE usuario_id=%s
+        GROUP BY categoria
+    """, (usuario_id,))
+    resumo_categoria = [(r["categoria"], float(r["total"])) for r in cursor.fetchall()]
 
-        total_gastos = sum(float(g["valor"]) for g in gastos) if gastos else 0
-        saldo = renda_mensal - total_gastos
+    # EVOLUÇÃO MENSAL
+    cursor.execute("""
+        SELECT DATE_TRUNC('month', data) as mes, SUM(valor) as total
+        FROM gastos
+        WHERE usuario_id=%s
+        GROUP BY mes
+        ORDER BY mes
+    """, (usuario_id,))
+    evolucao_mensal = []
+    meses_pt = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
 
-        # RESUMO CATEGORIA
-        cursor.execute("""
-            SELECT categoria, SUM(valor) as total
-            FROM gastos
-            WHERE usuario_id=%s
-            GROUP BY categoria
-        """, (usuario_id,))
-
-        resumo_categoria = [
-            (r["categoria"], float(r["total"]))
-            for r in cursor.fetchall()
-        ]
-
-        # EVOLUÇÃO MENSAL
-        cursor.execute("""
-            SELECT DATE_TRUNC('month', data) as mes, SUM(valor) as total
-            FROM gastos
-            WHERE usuario_id=%s
-            GROUP BY mes
-            ORDER BY mes
-        """, (usuario_id,))
-
-        evolucao_mensal = []
-        meses_pt = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
-
-        for row in cursor.fetchall():
-            evolucao_mensal.append(
-                (f"{meses_pt[row['mes'].month-1]}/{row['mes'].year}", float(row["total"]))
-            )
-
-        conn.close()
-
-        return render_template(
-            "dashboard.html",
-            nome=session["nome"],
-            gastos=gastos,
-            renda_mensal=renda_mensal,
-            saldo=saldo,
-            percentual=0,
-            resumo_categoria=resumo_categoria,
-            evolucao_mensal=evolucao_mensal
+    for row in cursor.fetchall():
+        evolucao_mensal.append(
+            (f"{meses_pt[row['mes'].month-1]}/{row['mes'].year}", float(row["total"]))
         )
 
-    except Exception as e:
-        return f"Erro dashboard: {e}"
+    conn.close()
+
+    return render_template(
+        "dashboard.html",
+        nome=session["nome"],
+        gastos=gastos,
+        renda_mensal=renda_mensal,
+        saldo=saldo,
+        percentual=0,
+        resumo_categoria=resumo_categoria,
+        evolucao_mensal=evolucao_mensal
+    )
 
 
-# ================= CRIAR ADMIN AUTOMÁTICO =================
+# ================= CRIAR ADMIN =================
 @app.route("/criar_admin")
 def criar_admin():
 
     conn = get_connection()
     if not conn:
-        return "Erro ao conectar ao banco."
+        return "Erro conexão"
 
     cursor = conn.cursor()
 
@@ -265,39 +243,73 @@ def admin():
 
     conn = get_connection()
     if not conn:
-        return "Erro ao conectar ao banco."
+        return "Erro conexão"
 
     cursor = conn.cursor()
-
     cursor.execute("""
         SELECT id, nome, email, role
         FROM usuarios
         ORDER BY id
     """)
-
     usuarios = cursor.fetchall()
     conn.close()
 
     return render_template("admin.html", usuarios=usuarios)
 
 
-# ================= EXCLUIR USUÁRIO (ADMIN) =================
+# ================= EDITAR USUÁRIO =================
+@app.route("/admin/editar/<int:user_id>", methods=["POST"])
+def editar_usuario(user_id):
+
+    if session.get("role") != "admin":
+        return "Acesso negado."
+
+    conn = get_connection()
+    if not conn:
+        return "Erro conexão"
+
+    cursor = conn.cursor()
+
+    nome = request.form.get("nome")
+    email = request.form.get("email")
+    senha = request.form.get("senha")
+    role = request.form.get("role")
+
+    if senha:
+        senha_hash = generate_password_hash(senha)
+        cursor.execute("""
+            UPDATE usuarios
+            SET nome=%s, email=%s, senha=%s, role=%s
+            WHERE id=%s
+        """, (nome, email, senha_hash, role, user_id))
+    else:
+        cursor.execute("""
+            UPDATE usuarios
+            SET nome=%s, email=%s, role=%s
+            WHERE id=%s
+        """, (nome, email, role, user_id))
+
+    conn.commit()
+    conn.close()
+
+    return redirect("/admin")
+
+
+# ================= EXCLUIR USUÁRIO =================
 @app.route("/admin/excluir/<int:user_id>")
 def excluir_usuario(user_id):
 
     if session.get("role") != "admin":
         return "Acesso negado."
 
-    # impedir auto exclusão
     if user_id == session.get("usuario_id"):
         return "Você não pode excluir seu próprio usuário."
 
     conn = get_connection()
     if not conn:
-        return "Erro ao conectar ao banco."
+        return "Erro conexão"
 
     cursor = conn.cursor()
-
     cursor.execute("DELETE FROM gastos WHERE usuario_id=%s", (user_id,))
     cursor.execute("DELETE FROM usuarios WHERE id=%s", (user_id,))
 
