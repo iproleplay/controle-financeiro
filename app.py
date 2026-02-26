@@ -288,3 +288,16 @@ def admin():
 def logout():
     session.clear()
     return redirect("/")
+
+@app.route("/verificar_role")
+def verificar_role():
+    conn = get_connection()
+    if not conn:
+        return "Erro conexão"
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT email, role FROM usuarios")
+    dados = cursor.fetchall()
+    conn.close()
+
+    return str(dados)
