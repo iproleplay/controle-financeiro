@@ -15,10 +15,8 @@
     <a href="/dashboard">Dashboard</a>
 
     {% if session.get("role") == "admin" %}
-    <a href="/admin/dashboard">Admin Dashboard</a>
     <a href="/admin">Gerenciar Usuários</a>
     {% endif %}
-
 </div>
 
 <div class="main">
@@ -54,6 +52,39 @@
 
         </div>
 
+        <!-- META PERSONALIZADA -->
+        <div class="grid">
+
+            <div class="card">
+                <h3>Definir Meta (%)</h3>
+                <form method="POST">
+                    <input type="hidden" name="tipo" value="meta">
+                    <input type="number" name="meta_percentual"
+                           value="{{ meta_percentual }}"
+                           min="1" max="100">
+                    <button type="submit">Salvar Meta</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>Meta Atual</h3>
+                <div class="stat">{{ meta_valor | brl }}</div>
+
+                <div style="background:#2c3e50; border-radius:10px; height:12px; margin-top:10px;">
+                    <div style="
+                        width: {{ percentual_usado }}%;
+                        height:100%;
+                        border-radius:10px;
+                        background: {% if percentual_usado > 100 %}#ef4444{% else %}#22c55e{% endif %};
+                        transition:0.4s;
+                    ">
+                    </div>
+                </div>
+
+                <small>{{ percentual_usado|round(1) }}% utilizado da meta</small>
+            </div>
+
+        </div>
 
         <!-- DEFINIR RENDA -->
         <div class="card">
@@ -65,8 +96,7 @@
             </form>
         </div>
 
-
-        <!-- CONTAS PRIORITÁRIAS -->
+        <!-- CONTAS -->
         <div class="card">
             <h3>Adicionar Conta</h3>
             <form method="POST">
@@ -87,7 +117,6 @@
             </form>
         </div>
 
-
         <!-- GRÁFICOS -->
         <div class="grid">
 
@@ -102,7 +131,6 @@
             </div>
 
         </div>
-
 
         <!-- LISTA -->
         <div class="card">
