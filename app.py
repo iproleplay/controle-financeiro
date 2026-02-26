@@ -28,6 +28,28 @@ def get_connection():
         return None
 
 
+# ================= CRIAR COLUNA META AUTOMATICAMENTE =================
+def garantir_coluna_meta():
+    conn = get_connection()
+    if not conn:
+        return
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            ALTER TABLE usuarios
+            ADD COLUMN IF NOT EXISTS meta_percentual FLOAT DEFAULT 70;
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print("Erro ao criar coluna meta_percentual:", e)
+
+
+with app.app_context():
+    garantir_coluna_meta()
+
+
 # ================= FILTRO BRL =================
 @app.template_filter("brl")
 def brl(valor):
@@ -48,10 +70,7 @@ def login():
 
         try:
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT * FROM usuarios WHERE email=%s",
-                (request.form.get("email"),)
-            )
+            cursor.execute("SELECT * FROM usuarios WHERE email=%s", (request.form.get("email"),))
             user = cursor.fetchone()
             conn.close()
 
@@ -84,14 +103,15 @@ def cadastro():
             senha_hash = generate_password_hash(request.form.get("senha"))
 
             cursor.execute("""
-                INSERT INTO usuarios (nome, email, senha, renda_mensal, role)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO usuarios (nome, email, senha, renda_mensal, role, meta_percentual)
+                VALUES (%s, %s, %s, %s, %s, %s)
             """, (
                 request.form.get("nome"),
                 request.form.get("email"),
                 senha_hash,
                 0,
-                "user"
+                "user",
+                70
             ))
 
             conn.commit()
@@ -105,7 +125,7 @@ def cadastro():
     return render_template("cadastro.html")
 
 
-# ================= DASHBOARD USUÁRIO =================
+# ================= DASHBOARD =================
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
 
@@ -143,6 +163,15 @@ def dashboard():
                 """, (float(renda), usuario_id))
                 conn.commit()
 
+            if tipo == "meta":
+                meta = request.form.get("meta_percentual", 70)
+                cursor.execute("""
+                    UPDATE usuarios
+                    SET meta_percentual=%s
+                    WHERE id=%s
+                """, (float(meta), usuario_id))
+                conn.commit()
+
             if tipo == "gasto":
                 valor = request.form.get("valor")
                 categoria = request.form.get("categoria")
@@ -160,10 +189,16 @@ def dashboard():
                     ))
                     conn.commit()
 
-        # RENDA
-        cursor.execute("SELECT renda_mensal FROM usuarios WHERE id=%s", (usuario_id,))
-        renda_row = cursor.fetchone()
-        renda_mensal = float(renda_row["renda_mensal"] or 0) if renda_row else 0
+        # BUSCAR RENDA E META
+        cursor.execute("""
+            SELECT renda_mensal, meta_percentual
+            FROM usuarios
+            WHERE id=%s
+        """, (usuario_id,))
+        user_row = cursor.fetchone()
+
+        renda_mensal = float(user_row["renda_mensal"] or 0)
+        meta_percentual = float(user_row["meta_percentual"] or 70)
 
         # GASTOS
         cursor.execute("""
@@ -176,7 +211,11 @@ def dashboard():
         total_gastos = sum(float(g["valor"]) for g in gastos) if gastos else 0
         saldo = renda_mensal - total_gastos
 
-        # RESUMO POR CATEGORIA
+        # CALCULAR META
+        meta_valor = renda_mensal * (meta_percentual / 100)
+        percentual_usado = (total_gastos / meta_valor * 100) if meta_valor > 0 else 0
+
+        # RESUMO CATEGORIA
         cursor.execute("""
             SELECT categoria, SUM(valor) as total
             FROM gastos
@@ -209,7 +248,9 @@ def dashboard():
             gastos=gastos,
             renda_mensal=renda_mensal,
             saldo=saldo,
-            percentual=0,
+            meta_percentual=meta_percentual,
+            meta_valor=meta_valor,
+            percentual_usado=percentual_usado,
             resumo_categoria=resumo_categoria,
             evolucao_mensal=evolucao_mensal
         )
@@ -218,9 +259,10 @@ def dashboard():
         return f"Erro dashboard: {e}"
 
 
-# ================= PAINEL ADMIN =================
+# ================= ADMIN =================
 @app.route("/admin")
 def admin():
+
     if session.get("role") != "admin":
         return "Acesso negado."
 
@@ -240,75 +282,6 @@ def admin():
         return f"Erro admin: {e}"
 
 
-# ================= EDITAR USUÁRIO =================
-@app.route("/admin/editar/<int:user_id>", methods=["POST"])
-def editar_usuario(user_id):
-
-    if session.get("role") != "admin":
-        return "Acesso negado."
-
-    conn = get_connection()
-    if not conn:
-        return "Erro conexão"
-
-    try:
-        cursor = conn.cursor()
-
-        nome = request.form.get("nome") or ""
-        email = request.form.get("email") or ""
-        senha = request.form.get("senha")
-        role = request.form.get("role") or "user"
-
-        if senha and senha.strip() != "":
-            senha_hash = generate_password_hash(senha)
-            cursor.execute("""
-                UPDATE usuarios
-                SET nome=%s, email=%s, senha=%s, role=%s
-                WHERE id=%s
-            """, (nome, email, senha_hash, role, user_id))
-        else:
-            cursor.execute("""
-                UPDATE usuarios
-                SET nome=%s, email=%s, role=%s
-                WHERE id=%s
-            """, (nome, email, role, user_id))
-
-        conn.commit()
-        conn.close()
-
-        return redirect("/admin")
-
-    except Exception as e:
-        return f"Erro ao editar usuário: {e}"
-
-
-# ================= EXCLUIR USUÁRIO =================
-@app.route("/admin/excluir/<int:user_id>")
-def excluir_usuario(user_id):
-
-    if session.get("role") != "admin":
-        return "Acesso negado."
-
-    if user_id == session.get("usuario_id"):
-        return "Você não pode excluir seu próprio usuário."
-
-    conn = get_connection()
-    if not conn:
-        return "Erro conexão"
-
-    try:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM gastos WHERE usuario_id=%s", (user_id,))
-        cursor.execute("DELETE FROM usuarios WHERE id=%s", (user_id,))
-        conn.commit()
-        conn.close()
-
-        return redirect("/admin")
-
-    except Exception as e:
-        return f"Erro ao excluir usuário: {e}"
-
-
 # ================= LOGOUT =================
 @app.route("/logout")
 def logout():
@@ -316,7 +289,6 @@ def logout():
     return redirect("/")
 
 
-# ================= START LOCAL =================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
