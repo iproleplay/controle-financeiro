@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <title>Dashboard</title>
 
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
@@ -125,6 +124,9 @@ select,input{
 }
 .toast.error{
     background:#ef4444;
+}
+canvas{
+    margin-top:15px;
 }
 </style>
 </head>
@@ -270,32 +272,64 @@ const resumoCategoria = {{ resumo_categoria|default([])|tojson }};
 const resumoTipo = {{ resumo_tipo|default([])|tojson }};
 const evolucaoMensal = {{ evolucao_mensal|default([])|tojson }};
 
-if (resumoCategoria.length) {
+const configPadrao = {
+    plugins: {
+        legend: { labels: { color: "#ffffff" } }
+    }
+};
+
+if (resumoCategoria.length > 0) {
 new Chart(document.getElementById("graficoCategoria"), {
 type:"doughnut",
 data:{
 labels:resumoCategoria.map(i=>i[0]),
-datasets:[{data:resumoCategoria.map(i=>i[1])}]
-}
+datasets:[{
+label:"Categorias",
+data:resumoCategoria.map(i=>i[1]),
+backgroundColor:["#ef4444","#3b82f6","#facc15","#22c55e","#a855f7","#f97316"],
+borderWidth:2
+}]
+},
+options:configPadrao
 });
 }
 
-if (resumoTipo.length) {
+if (resumoTipo.length > 0) {
 new Chart(document.getElementById("graficoTipo"), {
 type:"pie",
 data:{
 labels:resumoTipo.map(i=>i[0]),
-datasets:[{data:resumoTipo.map(i=>i[1])}]
-}
+datasets:[{
+label:"Tipo",
+data:resumoTipo.map(i=>i[1]),
+backgroundColor:["#3b82f6","#ef4444"],
+borderWidth:2
+}]
+},
+options:configPadrao
 });
 }
 
-if (evolucaoMensal.length) {
+if (evolucaoMensal.length > 0) {
 new Chart(document.getElementById("graficoMensal"), {
 type:"line",
 data:{
 labels:evolucaoMensal.map(i=>i[0]),
-datasets:[{data:evolucaoMensal.map(i=>i[1]), borderColor:"#22c55e"}]
+datasets:[{
+label:"Total por Mês",
+data:evolucaoMensal.map(i=>i[1]),
+borderColor:"#22c55e",
+backgroundColor:"rgba(34,197,94,0.1)",
+tension:0.4,
+fill:true
+}]
+},
+options:{
+...configPadrao,
+scales:{
+x:{ticks:{color:"#ffffff"}},
+y:{ticks:{color:"#ffffff"}}
+}
 }
 });
 }
