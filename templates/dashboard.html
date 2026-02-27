@@ -1,50 +1,305 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard</title>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body{
+    margin:0;
+    font-family: Arial, Helvetica, sans-serif;
+    background:#0f172a;
+    color:#ffffff;
+}
+.sidebar{
+    width:220px;
+    height:100vh;
+    background:#111827;
+    position:fixed;
+    padding:20px;
+}
+.sidebar h2{
+    color:#22c55e;
+}
+.sidebar a{
+    display:block;
+    margin-top:20px;
+    text-decoration:none;
+    color:#cbd5e1;
+}
+.sidebar a:hover{
+    color:#22c55e;
+}
+.main{
+    margin-left:240px;
+    padding:30px;
+}
+.navbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+.logout-btn{
+    background:#ef4444;
+    padding:8px 14px;
+    border-radius:6px;
+    color:white;
+    text-decoration:none;
+}
+.grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+    gap:20px;
+    margin-top:20px;
+}
+.card{
+    background:#1e293b;
+    padding:20px;
+    border-radius:12px;
+}
+.stat{
+    font-size:22px;
+    font-weight:bold;
+    margin-top:10px;
+}
+button{
+    background:#22c55e;
+    border:none;
+    padding:8px 12px;
+    border-radius:6px;
+    cursor:pointer;
+    margin-top:10px;
+}
+select,input{
+    width:100%;
+    padding:8px;
+    border-radius:6px;
+    border:none;
+    margin-top:5px;
+}
+.meta-bar{
+    width:100%;
+    background:#334155;
+    height:10px;
+    border-radius:6px;
+    margin-top:10px;
+}
+.meta-progress{
+    height:10px;
+    border-radius:6px;
+}
+.item-linha{
+    display:flex;
+    justify-content:space-between;
+    margin-top:10px;
+}
+.badge{
+    padding:3px 8px;
+    border-radius:6px;
+    font-size:12px;
+}
+.badge-fixa{
+    background:#3b82f6;
+}
+.badge-variavel{
+    background:#f97316;
+}
+.excluir{
+    color:#ef4444;
+    margin-left:10px;
+    text-decoration:none;
+}
+.toast-container{
+    position:fixed;
+    top:20px;
+    right:20px;
+}
+.toast{
+    background:#22c55e;
+    padding:10px 15px;
+    border-radius:6px;
+    margin-bottom:10px;
+}
+.toast.error{
+    background:#ef4444;
+}
+</style>
+</head>
+
+<body>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="toast-container">
+{% for category, message in messages %}
+<div class="toast {{category}}">
+{{message}}
+</div>
+{% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+
+<div class="sidebar">
+<h2>💳 FinancePro</h2>
+<a href="/dashboard">Dashboard</a>
+</div>
+
+<div class="main">
+
+<div class="navbar">
+<h1>Olá, {{ nome }}</h1>
+<a href="/logout" class="logout-btn">Logout</a>
+</div>
+
+<div class="grid">
+<div class="card">
+<h3>Renda Mensal</h3>
+<div class="stat">{{ renda_mensal | brl }}</div>
+</div>
+
+<div class="card">
+<h3>Total de Gastos</h3>
+<div class="stat">{{ (renda_mensal - saldo) | brl }}</div>
+</div>
+
+<div class="card">
+<h3>Saldo Atual</h3>
+<div class="stat" style="color: {{ '#22c55e' if saldo >= 0 else '#ef4444' }}">
+{{ saldo | brl }}
+</div>
+</div>
+</div>
+
+<div class="grid">
+
+<div class="card">
+<h3>Definir Renda</h3>
+<form method="POST">
+<input type="hidden" name="tipo" value="renda">
+<input type="number" step="0.01" name="renda_mensal" value="{{ renda_mensal }}" required>
+<button type="submit">Salvar</button>
+</form>
+</div>
+
+<div class="card">
+<h3>Meta (%)</h3>
+<form method="POST">
+<input type="hidden" name="tipo" value="meta">
+<input type="number" name="meta_percentual" value="{{ meta_percentual }}" required>
+<button type="submit">Salvar</button>
+</form>
+
+<div class="stat">{{ meta_valor | brl }}</div>
+<div class="meta-bar">
+<div class="meta-progress"
+style="width: {{ percentual_usado if percentual_usado <= 100 else 100 }}%;
+background: {{ '#ef4444' if percentual_usado > 100 else '#22c55e' }};">
+</div>
+</div>
+<small>{{ percentual_usado|round(1) }}% utilizado</small>
+</div>
+
+<div class="card">
+<h3>Adicionar Conta</h3>
+<form method="POST">
+<input type="hidden" name="tipo" value="gasto">
+<select name="categoria">
+<option>Aluguel</option>
+<option>Energia</option>
+<option>Internet</option>
+<option>Cartão</option>
+<option>Mercado</option>
+<option>Outros</option>
+</select>
+<select name="tipo_gasto">
+<option value="Fixa">Fixa</option>
+<option value="Variável">Variável</option>
+</select>
+<input type="number" step="0.01" name="valor" required>
+<button type="submit">Adicionar</button>
+</form>
+</div>
+
+</div>
+
+<div class="grid">
+<div class="card">
+<h3>Distribuição por Categoria</h3>
+<canvas id="graficoCategoria"></canvas>
+</div>
+
+<div class="card">
+<h3>Fixo x Variável</h3>
+<canvas id="graficoTipo"></canvas>
+</div>
+
+<div class="card">
+<h3>Evolução Mensal</h3>
+<canvas id="graficoMensal"></canvas>
+</div>
+</div>
+
+<div class="card">
+<h3>Contas Registradas</h3>
+{% for g in gastos %}
+<div class="item-linha">
+<div>
+<strong>{{ g.categoria }}</strong>
+<span class="badge {% if g.tipo=='Fixa' %}badge-fixa{% else %}badge-variavel{% endif %}">
+{{ g.tipo }}
+</span>
+</div>
+<div>
+{{ g.valor | brl }}
+<a href="/dashboard?excluir={{g.id}}" class="excluir">Excluir</a>
+</div>
+</div>
+{% else %}
+<p>Nenhuma conta registrada.</p>
+{% endfor %}
+</div>
+
+</div>
+
 <script>
 const resumoCategoria = {{ resumo_categoria|default([])|tojson }};
 const resumoTipo = {{ resumo_tipo|default([])|tojson }};
 const evolucaoMensal = {{ evolucao_mensal|default([])|tojson }};
 
-// ===== CATEGORIA =====
 if (resumoCategoria.length) {
-    new Chart(document.getElementById("graficoCategoria"), {
-        type: "doughnut",
-        data: {
-            labels: resumoCategoria.map(i => i[0]),
-            datasets: [{
-                data: resumoCategoria.map(i => i[1]),
-                backgroundColor: ["#ef4444","#3b82f6","#facc15","#22c55e","#a855f7","#f97316"]
-            }]
-        }
-    });
+new Chart(document.getElementById("graficoCategoria"), {
+type:"doughnut",
+data:{
+labels:resumoCategoria.map(i=>i[0]),
+datasets:[{data:resumoCategoria.map(i=>i[1])}]
+}
+});
 }
 
-// ===== TIPO =====
 if (resumoTipo.length) {
-    new Chart(document.getElementById("graficoTipo"), {
-        type: "pie",
-        data: {
-            labels: resumoTipo.map(i => i[0]),
-            datasets: [{
-                data: resumoTipo.map(i => i[1]),
-                backgroundColor: ["#3b82f6","#ef4444"]
-            }]
-        }
-    });
+new Chart(document.getElementById("graficoTipo"), {
+type:"pie",
+data:{
+labels:resumoTipo.map(i=>i[0]),
+datasets:[{data:resumoTipo.map(i=>i[1])}]
+}
+});
 }
 
-// ===== EVOLUÇÃO =====
 if (evolucaoMensal.length) {
-    new Chart(document.getElementById("graficoMensal"), {
-        type: "line",
-        data: {
-            labels: evolucaoMensal.map(i => i[0]),
-            datasets: [{
-                label: "Total por Mês",
-                data: evolucaoMensal.map(i => i[1]),
-                borderColor: "#22c55e",
-                tension: 0.4,
-                fill: false
-            }]
-        }
-    });
+new Chart(document.getElementById("graficoMensal"), {
+type:"line",
+data:{
+labels:evolucaoMensal.map(i=>i[0]),
+datasets:[{data:evolucaoMensal.map(i=>i[1]), borderColor:"#22c55e"}]
+}
+});
 }
 </script>
+
+</body>
+</html>
