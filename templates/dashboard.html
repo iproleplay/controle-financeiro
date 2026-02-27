@@ -35,32 +35,6 @@
 
     <div class="content">
 
-        <!-- FILTRO -->
-        <div class="card">
-            <form method="GET" style="display:flex; gap:10px; flex-wrap:wrap;">
-                <select name="mes">
-                    <option value="">Mês</option>
-                    {% for i in range(1,13) %}
-                        <option value="{{i}}" {% if request.args.get('mes') == i|string %}selected{% endif %}>
-                            {{ "%02d"|format(i) }}
-                        </option>
-                    {% endfor %}
-                </select>
-
-                <select name="ano">
-                    <option value="">Ano</option>
-                    {% for y in range(2024, 2031) %}
-                        <option value="{{y}}" {% if request.args.get('ano') == y|string %}selected{% endif %}>
-                            {{y}}
-                        </option>
-                    {% endfor %}
-                </select>
-
-                <button type="submit">Filtrar</button>
-                <a href="/dashboard"><button type="button">Limpar</button></a>
-            </form>
-        </div>
-
         <!-- KPI -->
         <div class="grid">
 
@@ -88,49 +62,19 @@
 
         </div>
 
-        <!-- META -->
-        <div class="grid">
-
-            <div class="card">
-                <h3>Definir Meta (%)</h3>
-                <form method="POST">
-                    <input type="hidden" name="tipo" value="meta">
-                    <input type="number"
-                           name="meta_percentual"
-                           value="{{ meta_percentual }}"
-                           min="1" max="100" required>
-                    <button type="submit">Salvar Meta</button>
-                </form>
-            </div>
-
-            <div class="card">
-                <h3>Meta Atual</h3>
-                <div class="stat">
-                    {{ meta_valor | brl }}
-                </div>
-
-                <div class="meta-bar">
-                    <div class="meta-progress"
-                         style="
-                            width: {{ percentual_usado if percentual_usado <= 100 else 100 }}%;
-                            background: {{ '#ef4444' if percentual_usado > 100 else '#22c55e' }};
-                         ">
-                    </div>
-                </div>
-
-                <small style="opacity:0.6;">
-                    {{ percentual_usado|round(1) }}% utilizado da meta
-                </small>
-            </div>
-
-        </div>
-
         <!-- RENDA -->
         <div class="card">
             <h3>Definir Renda Mensal</h3>
             <form method="POST">
                 <input type="hidden" name="tipo" value="renda">
-                <input type="number" step="0.01" name="renda" required>
+
+                <input 
+                    type="number"
+                    step="0.01"
+                    name="renda_mensal"
+                    value="{{ renda_mensal }}"
+                    required>
+
                 <button type="submit">Salvar</button>
             </form>
         </div>
@@ -161,26 +105,6 @@
             </form>
         </div>
 
-        <!-- GRÁFICOS -->
-        <div class="grid">
-
-            <div class="card">
-                <h3>Distribuição por Categoria</h3>
-                <canvas id="graficoCategoria"></canvas>
-            </div>
-
-            <div class="card">
-                <h3>Fixo x Variável</h3>
-                <canvas id="graficoTipo"></canvas>
-            </div>
-
-            <div class="card">
-                <h3>Evolução Mensal</h3>
-                <canvas id="graficoMensal"></canvas>
-            </div>
-
-        </div>
-
         <!-- LISTA -->
         <div class="card">
             <h3>Contas Registradas</h3>
@@ -206,9 +130,6 @@
 
                     <div class="item-valor">
                         {{ g.valor | brl }}
-                        <a href="/dashboard?excluir={{g.id}}" class="excluir">
-                            Excluir
-                        </a>
                     </div>
 
                 </div>
@@ -220,91 +141,6 @@
 
     </div>
 </div>
-
-<script>
-const resumoCategoria = {{ resumo_categoria | default([]) | tojson | safe }};
-const resumoTipo = {{ resumo_tipo | default([]) | tojson | safe }};
-const evolucaoMensal = {{ evolucao_mensal | default([]) | tojson | safe }};
-
-const configPadrao = {
-    plugins: {
-        tooltip: {
-            callbacks: {
-                label: function(context) {
-                    return "R$ " + context.raw.toLocaleString("pt-BR");
-                }
-            }
-        },
-        legend: {
-            labels: {
-                color: "#ffffff",
-                usePointStyle: true
-            }
-        }
-    }
-};
-
-if (resumoCategoria.length > 0) {
-    new Chart(document.getElementById("graficoCategoria"), {
-        type: "doughnut",
-        data: {
-            labels: resumoCategoria.map(i => i[0]),
-            datasets: [{
-                data: resumoCategoria.map(i => i[1]),
-                backgroundColor: ["#ef4444","#3b82f6","#facc15","#22c55e","#a855f7","#f97316"],
-                borderWidth: 2
-            }]
-        },
-        options: configPadrao
-    });
-}
-
-if (resumoTipo.length > 0) {
-    new Chart(document.getElementById("graficoTipo"), {
-        type: "pie",
-        data: {
-            labels: resumoTipo.map(i => i[0]),
-            datasets: [{
-                data: resumoTipo.map(i => i[1]),
-                backgroundColor: ["#3b82f6","#ef4444"],
-                borderWidth: 2
-            }]
-        },
-        options: configPadrao
-    });
-}
-
-if (evolucaoMensal.length > 0) {
-    new Chart(document.getElementById("graficoMensal"), {
-        type: "line",
-        data: {
-            labels: evolucaoMensal.map(i => i[0]),
-            datasets: [{
-                label: "Total por Mês",
-                data: evolucaoMensal.map(i => i[1]),
-                borderColor: "#22c55e",
-                backgroundColor: "rgba(34,197,94,0.1)",
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            ...configPadrao,
-            scales: {
-                x: { ticks: { color: "#ffffff" }},
-                y: {
-                    ticks: {
-                        color: "#ffffff",
-                        callback: function(value) {
-                            return "R$ " + value.toLocaleString("pt-BR");
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
-</script>
 
 </body>
 </html>
