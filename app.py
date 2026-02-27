@@ -6,58 +6,57 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
 app = Flask(__name__)
-
-# ================= CONFIG PRODUÇÃO =================
 app.secret_key = os.environ.get("SECRET_KEY", "fallback_secret")
-DATABASE_URL = os.environ.get("DATABASE_URL")
 
+DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
-    raise Exception("DATABASE_URL não configurada no Render.")
+    raise Exception("DATABASE_URL não configurada.")
 
 # ================= CONEXÃO =================
 def get_connection():
-    return psycopg2.connect(
-        DATABASE_URL,
-        cursor_factory=RealDictCursor
-    )
+    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
 # ================= CRIAR TABELAS =================
 def criar_tabelas():
-    try:
-        with get_connection() as conn:
-            with conn.cursor() as cursor:
+    conn = get_connection()
+    cursor = conn.cursor()
 
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS usuarios (
-                        id SERIAL PRIMARY KEY,
-                        nome VARCHAR(100),
-                        email VARCHAR(150) UNIQUE,
-                        senha TEXT,
-                        renda_mensal FLOAT DEFAULT 0,
-                        role VARCHAR(20) DEFAULT 'user',
-                        meta_percentual FLOAT DEFAULT 70
-                    );
-                """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id SERIAL PRIMARY KEY,
+            nome VARCHAR(100),
+            email VARCHAR(150) UNIQUE,
+            senha TEXT,
+            renda_mensal FLOAT DEFAULT 0,
+            role VARCHAR(20) DEFAULT 'user',
+            meta_percentual FLOAT DEFAULT 70
+        );
+    """)
 
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS gastos (
-                        id SERIAL PRIMARY KEY,
-                        usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
-                        descricao TEXT,
-                        valor FLOAT,
-                        categoria VARCHAR(100),
-                        data DATE,
-                        tipo VARCHAR(20) DEFAULT 'Variável'
-                    );
-                """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS gastos (
+            id SERIAL PRIMARY KEY,
+            usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+            descricao TEXT,
+            valor FLOAT,
+            categoria VARCHAR(100),
+            data DATE,
+            tipo VARCHAR(20) DEFAULT 'Variável'
+        );
+    """)
 
-                conn.commit()
+    conn.commit()
+    conn.close()
 
-    except Exception as e:
-        print("Erro ao criar tabelas:", e)
-
-with app.app_context():
-    criar_tabelas()
+# Inicializa banco na primeira requisição (evita travamento do Render)
+@app.before_request
+def inicializar_banco():
+    if not hasattr(app, "db_iniciado"):
+        try:
+            criar_tabelas()
+            app.db_iniciado = True
+        except Exception as e:
+            print("Erro ao iniciar banco:", e)
 
 # ================= FILTRO BRL =================
 @app.template_filter("brl")
@@ -70,53 +69,51 @@ def brl(valor):
 # ================= LOGIN =================
 @app.route("/", methods=["GET", "POST"])
 def login():
+
     if request.method == "POST":
-        try:
-            with get_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute(
-                        "SELECT * FROM usuarios WHERE email=%s",
-                        (request.form.get("email"),)
-                    )
-                    user = cursor.fetchone()
+        conn = get_connection()
+        cursor = conn.cursor()
 
-                    if user and check_password_hash(user["senha"], request.form.get("senha")):
-                        session["usuario_id"] = user["id"]
-                        session["nome"] = user["nome"]
-                        session["role"] = user["role"]
-                        return redirect("/dashboard")
+        cursor.execute(
+            "SELECT * FROM usuarios WHERE email=%s",
+            (request.form.get("email"),)
+        )
+        user = cursor.fetchone()
 
-            return "Login inválido"
+        if user and check_password_hash(user["senha"], request.form.get("senha")):
+            session["usuario_id"] = user["id"]
+            session["nome"] = user["nome"]
+            session["role"] = user["role"]
+            conn.close()
+            return redirect("/dashboard")
 
-        except Exception as e:
-            return f"Erro no login: {e}"
+        conn.close()
+        return "Login inválido"
 
     return render_template("login.html")
 
 # ================= CADASTRO =================
 @app.route("/cadastro", methods=["GET", "POST"])
 def cadastro():
+
     if request.method == "POST":
-        try:
-            with get_connection() as conn:
-                with conn.cursor() as cursor:
-                    senha_hash = generate_password_hash(request.form.get("senha"))
+        conn = get_connection()
+        cursor = conn.cursor()
 
-                    cursor.execute("""
-                        INSERT INTO usuarios (nome, email, senha)
-                        VALUES (%s, %s, %s)
-                    """, (
-                        request.form.get("nome"),
-                        request.form.get("email"),
-                        senha_hash
-                    ))
+        senha_hash = generate_password_hash(request.form.get("senha"))
 
-                    conn.commit()
+        cursor.execute("""
+            INSERT INTO usuarios (nome, email, senha)
+            VALUES (%s, %s, %s)
+        """, (
+            request.form.get("nome"),
+            request.form.get("email"),
+            senha_hash
+        ))
 
-            return redirect("/")
-
-        except Exception as e:
-            return f"Erro no cadastro: {e}"
+        conn.commit()
+        conn.close()
+        return redirect("/")
 
     return render_template("cadastro.html")
 
@@ -127,60 +124,62 @@ def dashboard():
     if "usuario_id" not in session:
         return redirect("/")
 
+    conn = get_connection()
+    cursor = conn.cursor()
     usuario_id = session["usuario_id"]
 
-    try:
-        with get_connection() as conn:
-            with conn.cursor() as cursor:
+    if request.method == "POST":
 
-                if request.method == "POST":
+        # SALVAR RENDA
+        if request.form.get("tipo") == "renda":
+            nova_renda = float(request.form.get("renda_mensal") or 0)
 
-                    # ===== SALVAR RENDA =====
-                    if request.form.get("tipo") == "renda":
-                        nova_renda = float(request.form.get("renda_mensal") or 0)
+            cursor.execute("""
+                UPDATE usuarios
+                SET renda_mensal=%s
+                WHERE id=%s
+            """, (nova_renda, usuario_id))
 
-                        cursor.execute("""
-                            UPDATE usuarios
-                            SET renda_mensal = %s
-                            WHERE id = %s
-                        """, (nova_renda, usuario_id))
+            conn.commit()
+            conn.close()
+            return redirect("/dashboard")
 
-                        conn.commit()
+        # SALVAR GASTO
+        elif request.form.get("tipo") == "gasto":
 
-                    # ===== SALVAR GASTO =====
-                    elif request.form.get("tipo") == "gasto":
-                        cursor.execute("""
-                            INSERT INTO gastos 
-                            (usuario_id, descricao, valor, categoria, data, tipo)
-                            VALUES (%s, %s, %s, %s, %s, %s)
-                        """, (
-                            usuario_id,
-                            request.form.get("descricao"),
-                            float(request.form.get("valor")),
-                            request.form.get("categoria"),
-                            datetime.now().date(),
-                            request.form.get("tipo_gasto")
-                        ))
-                        conn.commit()
+            cursor.execute("""
+                INSERT INTO gastos 
+                (usuario_id, descricao, valor, categoria, data, tipo)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                usuario_id,
+                request.form.get("descricao"),
+                float(request.form.get("valor")),
+                request.form.get("categoria"),
+                datetime.now().date(),
+                request.form.get("tipo_gasto")
+            ))
 
-                # ===== BUSCAR DADOS =====
-                cursor.execute("SELECT * FROM usuarios WHERE id=%s", (usuario_id,))
-                user = cursor.fetchone()
+            conn.commit()
+            conn.close()
+            return redirect("/dashboard")
 
-                cursor.execute("""
-                    SELECT * FROM gastos 
-                    WHERE usuario_id=%s 
-                    ORDER BY data DESC
-                """, (usuario_id,))
-                gastos = cursor.fetchall()
+    # BUSCAR DADOS
+    cursor.execute("SELECT * FROM usuarios WHERE id=%s", (usuario_id,))
+    user = cursor.fetchone()
 
-                # ===== CÁLCULOS =====
-                renda_mensal = float(user["renda_mensal"] or 0)
-                total_gastos = sum(float(g["valor"]) for g in gastos)
-                saldo = renda_mensal - total_gastos
+    cursor.execute("""
+        SELECT * FROM gastos 
+        WHERE usuario_id=%s 
+        ORDER BY data DESC
+    """, (usuario_id,))
+    gastos = cursor.fetchall()
 
-    except Exception as e:
-        return f"Erro no dashboard: {e}"
+    renda_mensal = float(user["renda_mensal"] or 0)
+    total_gastos = sum(float(g["valor"]) for g in gastos)
+    saldo = renda_mensal - total_gastos
+
+    conn.close()
 
     return render_template(
         "dashboard.html",
