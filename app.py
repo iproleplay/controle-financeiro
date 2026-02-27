@@ -51,6 +51,7 @@ def criar_tabelas():
     except Exception as e:
         print("Erro criando tabelas:", e)
 
+# roda uma única vez quando inicia
 criar_tabelas()
 
 # ================= FILTRO BRL =================
@@ -146,8 +147,7 @@ def dashboard():
         meta_valor = renda * (meta_percentual / 100)
         percentual_usado = (total / meta_valor * 100) if meta_valor > 0 else 0
 
-        # ===== GRÁFICOS CONVERTENDO PARA TUPLA =====
-
+        # ===== GRÁFICOS CONVERTIDOS PARA TUPLA =====
         cursor.execute("""
             SELECT categoria, SUM(valor) as total
             FROM gastos
@@ -201,7 +201,8 @@ def logout():
     session.clear()
     return redirect("/")
 
-# ================= RENDER =================
+# IMPORTANTE:
+# NÃO definir porta fixa.
+# Render usa gunicorn app:app
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run()
