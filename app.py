@@ -91,14 +91,16 @@ def dashboard():
     if request.method == "POST":
 
         if request.form.get("tipo") == "renda":
-            cursor.execute("UPDATE usuarios SET renda_mensal=%s WHERE id=%s",
-                           (float(request.form["renda_mensal"]), usuario_id))
-            flash("Renda atualizada!", "success")
+            cursor.execute(
+                "UPDATE usuarios SET renda_mensal=%s WHERE id=%s",
+                (float(request.form["renda"]), usuario_id)
+            )
 
         elif request.form.get("tipo") == "meta":
-            cursor.execute("UPDATE usuarios SET meta_percentual=%s WHERE id=%s",
-                           (float(request.form["meta_percentual"]), usuario_id))
-            flash("Meta atualizada!", "success")
+            cursor.execute(
+                "UPDATE usuarios SET meta_percentual=%s WHERE id=%s",
+                (float(request.form["meta_percentual"]), usuario_id)
+            )
 
         elif request.form.get("tipo") == "gasto":
             cursor.execute("""
@@ -111,7 +113,6 @@ def dashboard():
                 datetime.now().date(),
                 request.form["tipo_gasto"]
             ))
-            flash("Conta adicionada!", "success")
 
         conn.commit()
         return redirect("/dashboard")
@@ -119,10 +120,11 @@ def dashboard():
     # ===== EXCLUIR =====
     excluir = request.args.get("excluir")
     if excluir:
-        cursor.execute("DELETE FROM gastos WHERE id=%s AND usuario_id=%s",
-                       (excluir, usuario_id))
+        cursor.execute(
+            "DELETE FROM gastos WHERE id=%s AND usuario_id=%s",
+            (excluir, usuario_id)
+        )
         conn.commit()
-        flash("Conta excluída!", "success")
         return redirect("/dashboard")
 
     # ===== FILTRO =====
@@ -155,21 +157,23 @@ def dashboard():
     meta_valor = renda * (meta_percentual / 100)
     percentual_usado = (total / meta_valor * 100) if meta_valor > 0 else 0
 
-    # ===== GRÁFICOS =====
+    # ===== GRÁFICOS (CONVERTENDO PARA TUPLA) =====
 
     cursor.execute(f"""
         SELECT categoria, SUM(valor) as total
         FROM gastos {filtro}
         GROUP BY categoria
     """, tuple(params))
-    resumo_categoria = cursor.fetchall()
+    dados_cat = cursor.fetchall()
+    resumo_categoria = [(d["categoria"], float(d["total"])) for d in dados_cat]
 
     cursor.execute(f"""
         SELECT tipo, SUM(valor) as total
         FROM gastos {filtro}
         GROUP BY tipo
     """, tuple(params))
-    resumo_tipo = cursor.fetchall()
+    dados_tipo = cursor.fetchall()
+    resumo_tipo = [(d["tipo"], float(d["total"])) for d in dados_tipo]
 
     cursor.execute("""
         SELECT TO_CHAR(data,'MM/YYYY') as mes, SUM(valor) as total
@@ -178,7 +182,8 @@ def dashboard():
         GROUP BY mes
         ORDER BY mes
     """, (usuario_id,))
-    evolucao_mensal = cursor.fetchall()
+    dados_mes = cursor.fetchall()
+    evolucao_mensal = [(d["mes"], float(d["total"])) for d in dados_mes]
 
     conn.close()
 
