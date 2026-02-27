@@ -16,37 +16,34 @@ def get_connection():
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
 def criar_tabelas():
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
+    conn = get_connection()
+    cursor = conn.cursor()
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id SERIAL PRIMARY KEY,
-                nome VARCHAR(100),
-                email VARCHAR(150) UNIQUE,
-                senha TEXT,
-                renda_mensal FLOAT DEFAULT 0,
-                role VARCHAR(20) DEFAULT 'user',
-                meta_percentual FLOAT DEFAULT 70
-            );
-        """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id SERIAL PRIMARY KEY,
+            nome VARCHAR(100),
+            email VARCHAR(150) UNIQUE,
+            senha TEXT,
+            renda_mensal FLOAT DEFAULT 0,
+            role VARCHAR(20) DEFAULT 'user',
+            meta_percentual FLOAT DEFAULT 70
+        );
+    """)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS gastos (
-                id SERIAL PRIMARY KEY,
-                usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
-                valor FLOAT,
-                categoria VARCHAR(100),
-                data DATE,
-                tipo VARCHAR(20)
-            );
-        """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS gastos (
+            id SERIAL PRIMARY KEY,
+            usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+            valor FLOAT,
+            categoria VARCHAR(100),
+            data DATE,
+            tipo VARCHAR(20)
+        );
+    """)
 
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print("Erro criando tabelas:", e)
+    conn.commit()
+    conn.close()
 
 criar_tabelas()
 
@@ -86,7 +83,6 @@ def dashboard():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # ================= EXCLUIR =================
     excluir = request.args.get("excluir")
     if excluir:
         cursor.execute(
@@ -97,7 +93,6 @@ def dashboard():
         conn.close()
         return redirect("/dashboard")
 
-    # ================= POST =================
     if request.method == "POST":
 
         tipo = request.form.get("tipo")
@@ -130,7 +125,6 @@ def dashboard():
         conn.close()
         return redirect("/dashboard")
 
-    # ================= BUSCAR DADOS =================
     cursor.execute("SELECT * FROM gastos WHERE usuario_id=%s ORDER BY data DESC", (usuario_id,))
     gastos = cursor.fetchall()
 
@@ -145,7 +139,6 @@ def dashboard():
     meta_valor = renda * (meta_percentual / 100)
     percentual_usado = (total / meta_valor * 100) if meta_valor > 0 else 0
 
-    # ================= GRÁFICOS =================
     cursor.execute("""
         SELECT categoria, SUM(valor) as total
         FROM gastos
@@ -194,6 +187,3 @@ def dashboard():
 def logout():
     session.clear()
     return redirect("/")
-
-if __name__ == "__main__":
-    app.run()
