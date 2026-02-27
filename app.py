@@ -16,7 +16,7 @@ if not DATABASE_URL:
 def get_connection():
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
-# ================= CRIAR TABELAS (SAFE INIT) =================
+# ================= CRIAR TABELAS =================
 def criar_tabelas():
     try:
         conn = get_connection()
@@ -47,10 +47,10 @@ def criar_tabelas():
 
         conn.commit()
         conn.close()
+
     except Exception as e:
         print("Erro criando tabelas:", e)
 
-# roda apenas quando o app inicia (não a cada request)
 criar_tabelas()
 
 # ================= FILTRO BRL =================
@@ -131,17 +131,6 @@ def dashboard():
             conn.close()
             return redirect("/dashboard")
 
-        # ===== EXCLUIR =====
-        excluir = request.args.get("excluir")
-        if excluir:
-            cursor.execute(
-                "DELETE FROM gastos WHERE id=%s AND usuario_id=%s",
-                (excluir, usuario_id)
-            )
-            conn.commit()
-            conn.close()
-            return redirect("/dashboard")
-
         # ===== BUSCAR DADOS =====
         cursor.execute("SELECT * FROM gastos WHERE usuario_id=%s ORDER BY data DESC", (usuario_id,))
         gastos = cursor.fetchall()
@@ -157,31 +146,35 @@ def dashboard():
         meta_valor = renda * (meta_percentual / 100)
         percentual_usado = (total / meta_valor * 100) if meta_valor > 0 else 0
 
-        # ===== GRÁFICOS (tuplas compatíveis com i[0] i[1]) =====
+        # ===== GRÁFICOS CONVERTENDO PARA TUPLA =====
+
         cursor.execute("""
-            SELECT categoria, SUM(valor)
+            SELECT categoria, SUM(valor) as total
             FROM gastos
             WHERE usuario_id=%s
             GROUP BY categoria
         """, (usuario_id,))
-        resumo_categoria = cursor.fetchall()
+        dados_cat = cursor.fetchall()
+        resumo_categoria = [(d["categoria"], float(d["total"])) for d in dados_cat]
 
         cursor.execute("""
-            SELECT tipo, SUM(valor)
+            SELECT tipo, SUM(valor) as total
             FROM gastos
             WHERE usuario_id=%s
             GROUP BY tipo
         """, (usuario_id,))
-        resumo_tipo = cursor.fetchall()
+        dados_tipo = cursor.fetchall()
+        resumo_tipo = [(d["tipo"], float(d["total"])) for d in dados_tipo]
 
         cursor.execute("""
-            SELECT TO_CHAR(data,'MM/YYYY'), SUM(valor)
+            SELECT TO_CHAR(data,'MM/YYYY') as mes, SUM(valor) as total
             FROM gastos
             WHERE usuario_id=%s
-            GROUP BY 1
-            ORDER BY 1
+            GROUP BY mes
+            ORDER BY mes
         """, (usuario_id,))
-        evolucao_mensal = cursor.fetchall()
+        dados_mes = cursor.fetchall()
+        evolucao_mensal = [(d["mes"], float(d["total"])) for d in dados_mes]
 
         conn.close()
 
@@ -208,7 +201,7 @@ def logout():
     session.clear()
     return redirect("/")
 
-# IMPORTANTE PARA RENDER
+# ================= RENDER =================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
