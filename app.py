@@ -163,7 +163,7 @@ def dashboard():
                         ))
                         conn.commit()
 
-                # Buscar dados atualizados
+                # ===== BUSCAR DADOS =====
                 cursor.execute("SELECT * FROM usuarios WHERE id=%s", (usuario_id,))
                 user = cursor.fetchone()
 
@@ -174,6 +174,11 @@ def dashboard():
                 """, (usuario_id,))
                 gastos = cursor.fetchall()
 
+                # ===== CÁLCULOS =====
+                renda_mensal = float(user["renda_mensal"] or 0)
+                total_gastos = sum(float(g["valor"]) for g in gastos)
+                saldo = renda_mensal - total_gastos
+
     except Exception as e:
         return f"Erro no dashboard: {e}"
 
@@ -181,8 +186,8 @@ def dashboard():
         "dashboard.html",
         nome=session["nome"],
         gastos=gastos,
-        renda_mensal=user["renda_mensal"],
-        saldo=0,
+        renda_mensal=renda_mensal,
+        saldo=saldo,
         meta_percentual=user["meta_percentual"],
         meta_valor=0,
         percentual_usado=0,
