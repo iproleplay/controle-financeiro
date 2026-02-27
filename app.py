@@ -134,7 +134,21 @@ def dashboard():
             with conn.cursor() as cursor:
 
                 if request.method == "POST":
-                    if request.form.get("tipo") == "gasto":
+
+                    # ===== SALVAR RENDA =====
+                    if request.form.get("tipo") == "renda":
+                        nova_renda = float(request.form.get("renda_mensal") or 0)
+
+                        cursor.execute("""
+                            UPDATE usuarios
+                            SET renda_mensal = %s
+                            WHERE id = %s
+                        """, (nova_renda, usuario_id))
+
+                        conn.commit()
+
+                    # ===== SALVAR GASTO =====
+                    elif request.form.get("tipo") == "gasto":
                         cursor.execute("""
                             INSERT INTO gastos 
                             (usuario_id, descricao, valor, categoria, data, tipo)
@@ -149,6 +163,7 @@ def dashboard():
                         ))
                         conn.commit()
 
+                # Buscar dados atualizados
                 cursor.execute("SELECT * FROM usuarios WHERE id=%s", (usuario_id,))
                 user = cursor.fetchone()
 
@@ -182,8 +197,5 @@ def logout():
     session.clear()
     return redirect("/")
 
-# ⚠️ IMPORTANTE:
-# NÃO defina porta fixa.
-# Gunicorn vai cuidar disso no Render.
 if __name__ == "__main__":
     app.run(debug=True)
