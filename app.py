@@ -12,9 +12,11 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
     raise Exception("DATABASE_URL não configurada.")
 
+# ================= CONEXÃO =================
 def get_connection():
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
+# ================= CRIAR TABELAS =================
 def criar_tabelas():
     conn = get_connection()
     cursor = conn.cursor()
@@ -51,6 +53,7 @@ def init_db():
         criar_tabelas()
         app.db_init = True
 
+# ================= FILTRO BRL =================
 @app.template_filter("brl")
 def brl(valor):
     try:
@@ -58,6 +61,7 @@ def brl(valor):
     except:
         return "R$ 0,00"
 
+# ================= LOGIN =================
 @app.route("/", methods=["GET","POST"])
 def login():
     if request.method == "POST":
@@ -77,6 +81,7 @@ def login():
 
     return render_template("login.html")
 
+# ================= DASHBOARD =================
 @app.route("/dashboard", methods=["GET","POST"])
 def dashboard():
 
@@ -90,29 +95,40 @@ def dashboard():
     # ===== POST =====
     if request.method == "POST":
 
-        if request.form.get("tipo") == "renda":
-            cursor.execute(
-                "UPDATE usuarios SET renda_mensal=%s WHERE id=%s",
-                (float(request.form["renda"]), usuario_id)
-            )
+        tipo = request.form.get("tipo")
 
-        elif request.form.get("tipo") == "meta":
-            cursor.execute(
-                "UPDATE usuarios SET meta_percentual=%s WHERE id=%s",
-                (float(request.form["meta_percentual"]), usuario_id)
-            )
+        if tipo == "renda":
+            nova_renda = request.form.get("renda_mensal")
+            if nova_renda:
+                cursor.execute(
+                    "UPDATE usuarios SET renda_mensal=%s WHERE id=%s",
+                    (float(nova_renda), usuario_id)
+                )
 
-        elif request.form.get("tipo") == "gasto":
-            cursor.execute("""
-                INSERT INTO gastos (usuario_id,valor,categoria,data,tipo)
-                VALUES (%s,%s,%s,%s,%s)
-            """, (
-                usuario_id,
-                float(request.form["valor"]),
-                request.form["categoria"],
-                datetime.now().date(),
-                request.form["tipo_gasto"]
-            ))
+        elif tipo == "meta":
+            nova_meta = request.form.get("meta_percentual")
+            if nova_meta:
+                cursor.execute(
+                    "UPDATE usuarios SET meta_percentual=%s WHERE id=%s",
+                    (float(nova_meta), usuario_id)
+                )
+
+        elif tipo == "gasto":
+            valor = request.form.get("valor")
+            categoria = request.form.get("categoria")
+            tipo_gasto = request.form.get("tipo_gasto")
+
+            if valor and categoria and tipo_gasto:
+                cursor.execute("""
+                    INSERT INTO gastos (usuario_id, valor, categoria, data, tipo)
+                    VALUES (%s,%s,%s,%s,%s)
+                """, (
+                    usuario_id,
+                    float(valor),
+                    categoria,
+                    datetime.now().date(),
+                    tipo_gasto
+                ))
 
         conn.commit()
         return redirect("/dashboard")
@@ -157,33 +173,30 @@ def dashboard():
     meta_valor = renda * (meta_percentual / 100)
     percentual_usado = (total / meta_valor * 100) if meta_valor > 0 else 0
 
-    # ===== GRÁFICOS (CONVERTENDO PARA TUPLA) =====
+    # ===== GRÁFICOS (TUPLAS) =====
 
     cursor.execute(f"""
-        SELECT categoria, SUM(valor) as total
+        SELECT categoria, SUM(valor)
         FROM gastos {filtro}
         GROUP BY categoria
     """, tuple(params))
-    dados_cat = cursor.fetchall()
-    resumo_categoria = [(d["categoria"], float(d["total"])) for d in dados_cat]
+    resumo_categoria = cursor.fetchall()
 
     cursor.execute(f"""
-        SELECT tipo, SUM(valor) as total
+        SELECT tipo, SUM(valor)
         FROM gastos {filtro}
         GROUP BY tipo
     """, tuple(params))
-    dados_tipo = cursor.fetchall()
-    resumo_tipo = [(d["tipo"], float(d["total"])) for d in dados_tipo]
+    resumo_tipo = cursor.fetchall()
 
     cursor.execute("""
-        SELECT TO_CHAR(data,'MM/YYYY') as mes, SUM(valor) as total
+        SELECT TO_CHAR(data,'MM/YYYY'), SUM(valor)
         FROM gastos
         WHERE usuario_id=%s
-        GROUP BY mes
-        ORDER BY mes
+        GROUP BY 1
+        ORDER BY 1
     """, (usuario_id,))
-    dados_mes = cursor.fetchall()
-    evolucao_mensal = [(d["mes"], float(d["total"])) for d in dados_mes]
+    evolucao_mensal = cursor.fetchall()
 
     conn.close()
 
@@ -201,6 +214,7 @@ def dashboard():
         evolucao_mensal=evolucao_mensal
     )
 
+# ================= LOGOUT =================
 @app.route("/logout")
 def logout():
     session.clear()
