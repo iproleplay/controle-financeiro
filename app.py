@@ -9,7 +9,6 @@ app = Flask(__name__)
 
 # ================= CONFIG PRODUÇÃO =================
 app.secret_key = os.environ.get("SECRET_KEY", "fallback_secret")
-
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 if not DATABASE_URL:
@@ -183,6 +182,8 @@ def logout():
     session.clear()
     return redirect("/")
 
-# ================= PRODUÇÃO =================
+# ⚠️ IMPORTANTE:
+# NÃO defina porta fixa.
+# Gunicorn vai cuidar disso no Render.
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(debug=True)
