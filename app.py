@@ -12,11 +12,9 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
     raise Exception("DATABASE_URL não configurada.")
 
-# ================= CONEXÃO =================
 def get_connection():
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
-# ================= CRIAR TABELAS =================
 def criar_tabelas():
     conn = get_connection()
     cursor = conn.cursor()
@@ -37,28 +35,22 @@ def criar_tabelas():
         CREATE TABLE IF NOT EXISTS gastos (
             id SERIAL PRIMARY KEY,
             usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
-            descricao TEXT,
             valor FLOAT,
             categoria VARCHAR(100),
             data DATE,
-            tipo VARCHAR(20) DEFAULT 'Variável'
+            tipo VARCHAR(20)
         );
     """)
 
     conn.commit()
     conn.close()
 
-# Inicializa banco na primeira requisição (evita travamento do Render)
 @app.before_request
-def inicializar_banco():
-    if not hasattr(app, "db_iniciado"):
-        try:
-            criar_tabelas()
-            app.db_iniciado = True
-        except Exception as e:
-            print("Erro ao iniciar banco:", e)
+def inicializar():
+    if not hasattr(app, "db_ok"):
+        criar_tabelas()
+        app.db_ok = True
 
-# ================= FILTRO BRL =================
 @app.template_filter("brl")
 def brl(valor):
     try:
@@ -66,118 +58,135 @@ def brl(valor):
     except:
         return "R$ 0,00"
 
-# ================= LOGIN =================
-@app.route("/", methods=["GET", "POST"])
+@app.route("/", methods=["GET","POST"])
 def login():
-
     if request.method == "POST":
         conn = get_connection()
         cursor = conn.cursor()
-
-        cursor.execute(
-            "SELECT * FROM usuarios WHERE email=%s",
-            (request.form.get("email"),)
-        )
+        cursor.execute("SELECT * FROM usuarios WHERE email=%s", (request.form["email"],))
         user = cursor.fetchone()
+        conn.close()
 
-        if user and check_password_hash(user["senha"], request.form.get("senha")):
+        if user and check_password_hash(user["senha"], request.form["senha"]):
             session["usuario_id"] = user["id"]
             session["nome"] = user["nome"]
             session["role"] = user["role"]
-            conn.close()
             return redirect("/dashboard")
 
-        conn.close()
         return "Login inválido"
 
     return render_template("login.html")
 
-# ================= CADASTRO =================
-@app.route("/cadastro", methods=["GET", "POST"])
+@app.route("/cadastro", methods=["GET","POST"])
 def cadastro():
-
     if request.method == "POST":
         conn = get_connection()
         cursor = conn.cursor()
-
-        senha_hash = generate_password_hash(request.form.get("senha"))
-
         cursor.execute("""
-            INSERT INTO usuarios (nome, email, senha)
-            VALUES (%s, %s, %s)
+            INSERT INTO usuarios (nome,email,senha)
+            VALUES (%s,%s,%s)
         """, (
-            request.form.get("nome"),
-            request.form.get("email"),
-            senha_hash
+            request.form["nome"],
+            request.form["email"],
+            generate_password_hash(request.form["senha"])
         ))
-
         conn.commit()
         conn.close()
         return redirect("/")
 
     return render_template("cadastro.html")
 
-# ================= DASHBOARD =================
-@app.route("/dashboard", methods=["GET", "POST"])
+@app.route("/dashboard", methods=["GET","POST"])
 def dashboard():
-
     if "usuario_id" not in session:
         return redirect("/")
 
+    usuario_id = session["usuario_id"]
     conn = get_connection()
     cursor = conn.cursor()
-    usuario_id = session["usuario_id"]
 
     if request.method == "POST":
 
-        # SALVAR RENDA
         if request.form.get("tipo") == "renda":
-            nova_renda = float(request.form.get("renda_mensal") or 0)
-
             cursor.execute("""
-                UPDATE usuarios
-                SET renda_mensal=%s
-                WHERE id=%s
-            """, (nova_renda, usuario_id))
+                UPDATE usuarios SET renda_mensal=%s WHERE id=%s
+            """, (float(request.form["renda_mensal"]), usuario_id))
 
-            conn.commit()
-            conn.close()
-            return redirect("/dashboard")
+        elif request.form.get("tipo") == "meta":
+            cursor.execute("""
+                UPDATE usuarios SET meta_percentual=%s WHERE id=%s
+            """, (float(request.form["meta_percentual"]), usuario_id))
 
-        # SALVAR GASTO
         elif request.form.get("tipo") == "gasto":
-
             cursor.execute("""
-                INSERT INTO gastos 
-                (usuario_id, descricao, valor, categoria, data, tipo)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO gastos (usuario_id,valor,categoria,data,tipo)
+                VALUES (%s,%s,%s,%s,%s)
             """, (
                 usuario_id,
-                request.form.get("descricao"),
-                float(request.form.get("valor")),
-                request.form.get("categoria"),
+                float(request.form["valor"]),
+                request.form["categoria"],
                 datetime.now().date(),
-                request.form.get("tipo_gasto")
+                request.form["tipo_gasto"]
             ))
 
-            conn.commit()
-            conn.close()
-            return redirect("/dashboard")
+        conn.commit()
+        return redirect("/dashboard")
 
-    # BUSCAR DADOS
+    excluir = request.args.get("excluir")
+    if excluir:
+        cursor.execute("DELETE FROM gastos WHERE id=%s AND usuario_id=%s", (excluir, usuario_id))
+        conn.commit()
+        return redirect("/dashboard")
+
+    mes = request.args.get("mes")
+    ano = request.args.get("ano")
+
+    filtro = "WHERE usuario_id=%s"
+    params = [usuario_id]
+
+    if mes:
+        filtro += " AND EXTRACT(MONTH FROM data)=%s"
+        params.append(mes)
+    if ano:
+        filtro += " AND EXTRACT(YEAR FROM data)=%s"
+        params.append(ano)
+
+    cursor.execute(f"SELECT * FROM gastos {filtro} ORDER BY data DESC", tuple(params))
+    gastos = cursor.fetchall()
+
     cursor.execute("SELECT * FROM usuarios WHERE id=%s", (usuario_id,))
     user = cursor.fetchone()
 
-    cursor.execute("""
-        SELECT * FROM gastos 
-        WHERE usuario_id=%s 
-        ORDER BY data DESC
-    """, (usuario_id,))
-    gastos = cursor.fetchall()
+    renda = float(user["renda_mensal"] or 0)
+    total = sum(float(g["valor"]) for g in gastos)
+    saldo = renda - total
 
-    renda_mensal = float(user["renda_mensal"] or 0)
-    total_gastos = sum(float(g["valor"]) for g in gastos)
-    saldo = renda_mensal - total_gastos
+    meta_percentual = float(user["meta_percentual"] or 0)
+    meta_valor = renda * (meta_percentual/100)
+    percentual_usado = (total/meta_valor*100) if meta_valor > 0 else 0
+
+    cursor.execute(f"""
+        SELECT categoria, SUM(valor)
+        FROM gastos {filtro}
+        GROUP BY categoria
+    """, tuple(params))
+    resumo_categoria = cursor.fetchall()
+
+    cursor.execute(f"""
+        SELECT tipo, SUM(valor)
+        FROM gastos {filtro}
+        GROUP BY tipo
+    """, tuple(params))
+    resumo_tipo = cursor.fetchall()
+
+    cursor.execute(f"""
+        SELECT TO_CHAR(data,'MM/YYYY'), SUM(valor)
+        FROM gastos
+        WHERE usuario_id=%s
+        GROUP BY 1
+        ORDER BY 1
+    """, (usuario_id,))
+    evolucao = cursor.fetchall()
 
     conn.close()
 
@@ -185,17 +194,16 @@ def dashboard():
         "dashboard.html",
         nome=session["nome"],
         gastos=gastos,
-        renda_mensal=renda_mensal,
+        renda_mensal=renda,
         saldo=saldo,
-        meta_percentual=user["meta_percentual"],
-        meta_valor=0,
-        percentual_usado=0,
-        resumo_categoria=[],
-        resumo_tipo=[],
-        evolucao_mensal=[]
+        meta_percentual=meta_percentual,
+        meta_valor=meta_valor,
+        percentual_usado=percentual_usado,
+        resumo_categoria=resumo_categoria,
+        resumo_tipo=resumo_tipo,
+        evolucao_mensal=evolucao
     )
 
-# ================= LOGOUT =================
 @app.route("/logout")
 def logout():
     session.clear()

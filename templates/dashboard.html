@@ -13,16 +13,12 @@
 <div class="sidebar">
     <h2>💳 FinancePro</h2>
 
-    <a href="/dashboard"
-       class="{% if request.path == '/dashboard' %}active{% endif %}">
-       Dashboard
+    <a href="/dashboard" class="{% if request.path == '/dashboard' %}active{% endif %}">
+        Dashboard
     </a>
 
     {% if session.get("role") == "admin" %}
-    <a href="/admin"
-       class="{% if request.path == '/admin' %}active{% endif %}">
-       Gerenciar Usuários
-    </a>
+    <a href="/admin">Gerenciar Usuários</a>
     {% endif %}
 </div>
 
@@ -35,29 +31,82 @@
 
     <div class="content">
 
+        <!-- FILTRO -->
+        <div class="card">
+            <form method="GET" style="display:flex; gap:10px; flex-wrap:wrap;">
+                <select name="mes">
+                    <option value="">Mês</option>
+                    {% for i in range(1,13) %}
+                        <option value="{{i}}" {% if request.args.get('mes') == i|string %}selected{% endif %}>
+                            {{ "%02d"|format(i) }}
+                        </option>
+                    {% endfor %}
+                </select>
+
+                <select name="ano">
+                    <option value="">Ano</option>
+                    {% for y in range(2024, 2031) %}
+                        <option value="{{y}}" {% if request.args.get('ano') == y|string %}selected{% endif %}>
+                            {{y}}
+                        </option>
+                    {% endfor %}
+                </select>
+
+                <button type="submit">Filtrar</button>
+                <a href="/dashboard"><button type="button">Limpar</button></a>
+            </form>
+        </div>
+
         <!-- KPI -->
         <div class="grid">
 
             <div class="card">
                 <h3>Renda Mensal</h3>
-                <div class="stat">
-                    {{ renda_mensal | brl }}
-                </div>
+                <div class="stat">{{ renda_mensal | brl }}</div>
             </div>
 
             <div class="card">
                 <h3>Total de Gastos</h3>
-                <div class="stat">
-                    {{ (renda_mensal - saldo) | brl }}
-                </div>
+                <div class="stat">{{ (renda_mensal - saldo) | brl }}</div>
             </div>
 
             <div class="card">
                 <h3>Saldo Atual</h3>
-                <div class="stat"
-                     style="color: {{ '#22c55e' if saldo >= 0 else '#ef4444' }}">
+                <div class="stat" style="color: {{ '#22c55e' if saldo >= 0 else '#ef4444' }}">
                     {{ saldo | brl }}
                 </div>
+            </div>
+
+        </div>
+
+        <!-- META -->
+        <div class="grid">
+
+            <div class="card">
+                <h3>Definir Meta (%)</h3>
+                <form method="POST">
+                    <input type="hidden" name="tipo" value="meta">
+                    <input type="number" name="meta_percentual"
+                           value="{{ meta_percentual }}"
+                           min="1" max="100" required>
+                    <button type="submit">Salvar Meta</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>Meta Atual</h3>
+                <div class="stat">{{ meta_valor | brl }}</div>
+
+                <div class="meta-bar">
+                    <div class="meta-progress"
+                         style="
+                         width: {{ percentual_usado if percentual_usado <= 100 else 100 }}%;
+                         background: {{ '#ef4444' if percentual_usado > 100 else '#22c55e' }};
+                         ">
+                    </div>
+                </div>
+
+                <small>{{ percentual_usado|round(1) }}% utilizado da meta</small>
             </div>
 
         </div>
@@ -67,14 +116,10 @@
             <h3>Definir Renda Mensal</h3>
             <form method="POST">
                 <input type="hidden" name="tipo" value="renda">
-
-                <input 
-                    type="number"
-                    step="0.01"
-                    name="renda_mensal"
-                    value="{{ renda_mensal }}"
-                    required>
-
+                <input type="number" step="0.01"
+                       name="renda_mensal"
+                       value="{{ renda_mensal }}"
+                       required>
                 <button type="submit">Salvar</button>
             </form>
         </div>
@@ -100,9 +145,28 @@
                 </select>
 
                 <input type="number" step="0.01" name="valor" required>
-
                 <button type="submit">Adicionar</button>
             </form>
+        </div>
+
+        <!-- GRÁFICOS -->
+        <div class="grid">
+
+            <div class="card">
+                <h3>Distribuição por Categoria</h3>
+                <canvas id="graficoCategoria"></canvas>
+            </div>
+
+            <div class="card">
+                <h3>Fixo x Variável</h3>
+                <canvas id="graficoTipo"></canvas>
+            </div>
+
+            <div class="card">
+                <h3>Evolução Mensal</h3>
+                <canvas id="graficoMensal"></canvas>
+            </div>
+
         </div>
 
         <!-- LISTA -->
@@ -112,11 +176,9 @@
             {% if gastos %}
                 {% for g in gastos %}
                 <div class="item-linha">
-
                     <div class="item-info">
                         <strong>{{ g.categoria }}</strong>
-
-                        <span class="badge 
+                        <span class="badge
                             {% if g.tipo == 'Fixa' %}
                                 badge-fixa
                             {% else %}
@@ -124,14 +186,13 @@
                             {% endif %}">
                             {{ g.tipo }}
                         </span>
-
                         <small>{{ g.data }}</small>
                     </div>
 
                     <div class="item-valor">
                         {{ g.valor | brl }}
+                        <a href="/dashboard?excluir={{g.id}}" class="excluir">Excluir</a>
                     </div>
-
                 </div>
                 {% endfor %}
             {% else %}
@@ -141,6 +202,53 @@
 
     </div>
 </div>
+
+<script>
+const resumoCategoria = {{ resumo_categoria|tojson }};
+const resumoTipo = {{ resumo_tipo|tojson }};
+const evolucaoMensal = {{ evolucao_mensal|tojson }};
+
+if (resumoCategoria.length) {
+    new Chart(document.getElementById("graficoCategoria"), {
+        type: "doughnut",
+        data: {
+            labels: resumoCategoria.map(i => i.categoria),
+            datasets: [{
+                data: resumoCategoria.map(i => i.sum),
+                backgroundColor: ["#ef4444","#3b82f6","#facc15","#22c55e","#a855f7","#f97316"]
+            }]
+        }
+    });
+}
+
+if (resumoTipo.length) {
+    new Chart(document.getElementById("graficoTipo"), {
+        type: "pie",
+        data: {
+            labels: resumoTipo.map(i => i.tipo),
+            datasets: [{
+                data: resumoTipo.map(i => i.sum),
+                backgroundColor: ["#3b82f6","#ef4444"]
+            }]
+        }
+    });
+}
+
+if (evolucaoMensal.length) {
+    new Chart(document.getElementById("graficoMensal"), {
+        type: "line",
+        data: {
+            labels: evolucaoMensal.map(i => i.to_char),
+            datasets: [{
+                label: "Total por Mês",
+                data: evolucaoMensal.map(i => i.sum),
+                borderColor: "#22c55e",
+                fill: false
+            }]
+        }
+    });
+}
+</script>
 
 </body>
 </html>
