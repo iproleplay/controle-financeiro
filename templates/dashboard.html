@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FinancePro</title>
+
+<!-- PWA -->
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<meta name="theme-color" content="#22c55e">
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
@@ -294,6 +299,13 @@ background:{{ '#22c55e' if percentual_usado<=100 else '#ef4444' }};">
 <script>
 function toggleMenu(){
 document.getElementById("sidebar").classList.toggle("active");
+}
+
+/* Registrar Service Worker */
+if ('serviceWorker' in navigator) {
+navigator.serviceWorker.register('/static/service-worker.js')
+.then(()=>console.log("Service Worker registrado"))
+.catch(err=>console.log("Erro SW:",err));
 }
 
 const resumoCategoria = {{ resumo_categoria|tojson }};

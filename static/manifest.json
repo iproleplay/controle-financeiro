@@ -1,11 +1,11 @@
 {
-  "name": "Controle Financeiro",
-  "short_name": "Financeiro",
-  "start_url": "/",
+  "name": "FinancePro",
+  "short_name": "FinancePro",
+  "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#0e0e11",
-  "theme_color": "#d4af37",
-  "description": "Sistema de controle financeiro pessoal",
+  "background_color": "#0f172a",
+  "theme_color": "#22c55e",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "/static/icon-192.png",
