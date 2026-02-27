@@ -16,7 +16,7 @@ if not DATABASE_URL:
 def get_connection():
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
-# ================= CRIAR TABELAS =================
+# ================= CRIAR TABELAS (RODA UMA VEZ) =================
 def criar_tabelas():
     conn = get_connection()
     cursor = conn.cursor()
@@ -47,11 +47,8 @@ def criar_tabelas():
     conn.commit()
     conn.close()
 
-@app.before_request
-def init_db():
-    if not hasattr(app, "db_init"):
-        criar_tabelas()
-        app.db_init = True
+# RODA APENAS UMA VEZ NA INICIALIZAÇÃO
+criar_tabelas()
 
 # ================= FILTRO BRL =================
 @app.template_filter("brl")
@@ -98,39 +95,31 @@ def dashboard():
         tipo = request.form.get("tipo")
 
         if tipo == "renda":
-            nova_renda = request.form.get("renda_mensal")
-            if nova_renda:
-                cursor.execute(
-                    "UPDATE usuarios SET renda_mensal=%s WHERE id=%s",
-                    (float(nova_renda), usuario_id)
-                )
+            cursor.execute(
+                "UPDATE usuarios SET renda_mensal=%s WHERE id=%s",
+                (float(request.form["renda_mensal"]), usuario_id)
+            )
 
         elif tipo == "meta":
-            nova_meta = request.form.get("meta_percentual")
-            if nova_meta:
-                cursor.execute(
-                    "UPDATE usuarios SET meta_percentual=%s WHERE id=%s",
-                    (float(nova_meta), usuario_id)
-                )
+            cursor.execute(
+                "UPDATE usuarios SET meta_percentual=%s WHERE id=%s",
+                (float(request.form["meta_percentual"]), usuario_id)
+            )
 
         elif tipo == "gasto":
-            valor = request.form.get("valor")
-            categoria = request.form.get("categoria")
-            tipo_gasto = request.form.get("tipo_gasto")
-
-            if valor and categoria and tipo_gasto:
-                cursor.execute("""
-                    INSERT INTO gastos (usuario_id, valor, categoria, data, tipo)
-                    VALUES (%s,%s,%s,%s,%s)
-                """, (
-                    usuario_id,
-                    float(valor),
-                    categoria,
-                    datetime.now().date(),
-                    tipo_gasto
-                ))
+            cursor.execute("""
+                INSERT INTO gastos (usuario_id, valor, categoria, data, tipo)
+                VALUES (%s,%s,%s,%s,%s)
+            """, (
+                usuario_id,
+                float(request.form["valor"]),
+                request.form["categoria"],
+                datetime.now().date(),
+                request.form["tipo_gasto"]
+            ))
 
         conn.commit()
+        conn.close()
         return redirect("/dashboard")
 
     # ===== EXCLUIR =====
@@ -141,27 +130,13 @@ def dashboard():
             (excluir, usuario_id)
         )
         conn.commit()
+        conn.close()
         return redirect("/dashboard")
 
-    # ===== FILTRO =====
-    mes = request.args.get("mes")
-    ano = request.args.get("ano")
-
-    filtro = "WHERE usuario_id=%s"
-    params = [usuario_id]
-
-    if mes:
-        filtro += " AND EXTRACT(MONTH FROM data)=%s"
-        params.append(mes)
-
-    if ano:
-        filtro += " AND EXTRACT(YEAR FROM data)=%s"
-        params.append(ano)
-
-    cursor.execute(f"SELECT * FROM gastos {filtro} ORDER BY data DESC", tuple(params))
+    # ===== BUSCAR DADOS =====
+    cursor.execute("SELECT * FROM gastos WHERE usuario_id=%s ORDER BY data DESC", (usuario_id,))
     gastos = cursor.fetchall()
 
-    # ===== DADOS USUARIO =====
     cursor.execute("SELECT * FROM usuarios WHERE id=%s", (usuario_id,))
     user = cursor.fetchone()
 
@@ -173,20 +148,21 @@ def dashboard():
     meta_valor = renda * (meta_percentual / 100)
     percentual_usado = (total / meta_valor * 100) if meta_valor > 0 else 0
 
-    # ===== GRÁFICOS (TUPLAS) =====
-
-    cursor.execute(f"""
+    # ===== GRÁFICOS =====
+    cursor.execute("""
         SELECT categoria, SUM(valor)
-        FROM gastos {filtro}
+        FROM gastos
+        WHERE usuario_id=%s
         GROUP BY categoria
-    """, tuple(params))
+    """, (usuario_id,))
     resumo_categoria = cursor.fetchall()
 
-    cursor.execute(f"""
+    cursor.execute("""
         SELECT tipo, SUM(valor)
-        FROM gastos {filtro}
+        FROM gastos
+        WHERE usuario_id=%s
         GROUP BY tipo
-    """, tuple(params))
+    """, (usuario_id,))
     resumo_tipo = cursor.fetchall()
 
     cursor.execute("""
