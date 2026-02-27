@@ -87,6 +87,7 @@ def dashboard():
     conn = get_connection()
     cursor = conn.cursor()
 
+    # ===== POST =====
     if request.method == "POST":
 
         if request.form.get("tipo") == "renda":
@@ -115,6 +116,7 @@ def dashboard():
         conn.commit()
         return redirect("/dashboard")
 
+    # ===== EXCLUIR =====
     excluir = request.args.get("excluir")
     if excluir:
         cursor.execute("DELETE FROM gastos WHERE id=%s AND usuario_id=%s",
@@ -123,9 +125,25 @@ def dashboard():
         flash("Conta excluída!", "success")
         return redirect("/dashboard")
 
-    cursor.execute("SELECT * FROM gastos WHERE usuario_id=%s ORDER BY data DESC", (usuario_id,))
+    # ===== FILTRO =====
+    mes = request.args.get("mes")
+    ano = request.args.get("ano")
+
+    filtro = "WHERE usuario_id=%s"
+    params = [usuario_id]
+
+    if mes:
+        filtro += " AND EXTRACT(MONTH FROM data)=%s"
+        params.append(mes)
+
+    if ano:
+        filtro += " AND EXTRACT(YEAR FROM data)=%s"
+        params.append(ano)
+
+    cursor.execute(f"SELECT * FROM gastos {filtro} ORDER BY data DESC", tuple(params))
     gastos = cursor.fetchall()
 
+    # ===== DADOS USUARIO =====
     cursor.execute("SELECT * FROM usuarios WHERE id=%s", (usuario_id,))
     user = cursor.fetchone()
 
@@ -137,10 +155,30 @@ def dashboard():
     meta_valor = renda * (meta_percentual / 100)
     percentual_usado = (total / meta_valor * 100) if meta_valor > 0 else 0
 
-    # gráficos
-    resumo_categoria = []
-    resumo_tipo = []
-    evolucao_mensal = []
+    # ===== GRÁFICOS =====
+
+    cursor.execute(f"""
+        SELECT categoria, SUM(valor) as total
+        FROM gastos {filtro}
+        GROUP BY categoria
+    """, tuple(params))
+    resumo_categoria = cursor.fetchall()
+
+    cursor.execute(f"""
+        SELECT tipo, SUM(valor) as total
+        FROM gastos {filtro}
+        GROUP BY tipo
+    """, tuple(params))
+    resumo_tipo = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT TO_CHAR(data,'MM/YYYY') as mes, SUM(valor) as total
+        FROM gastos
+        WHERE usuario_id=%s
+        GROUP BY mes
+        ORDER BY mes
+    """, (usuario_id,))
+    evolucao_mensal = cursor.fetchall()
 
     conn.close()
 
