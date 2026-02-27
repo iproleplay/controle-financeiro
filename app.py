@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect, session, flash
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import check_password_hash
 from datetime import datetime
 
 app = Flask(__name__)
@@ -16,38 +16,41 @@ if not DATABASE_URL:
 def get_connection():
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
-# ================= CRIAR TABELAS (RODA UMA VEZ) =================
+# ================= CRIAR TABELAS (SAFE INIT) =================
 def criar_tabelas():
-    conn = get_connection()
-    cursor = conn.cursor()
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id SERIAL PRIMARY KEY,
-            nome VARCHAR(100),
-            email VARCHAR(150) UNIQUE,
-            senha TEXT,
-            renda_mensal FLOAT DEFAULT 0,
-            role VARCHAR(20) DEFAULT 'user',
-            meta_percentual FLOAT DEFAULT 70
-        );
-    """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id SERIAL PRIMARY KEY,
+                nome VARCHAR(100),
+                email VARCHAR(150) UNIQUE,
+                senha TEXT,
+                renda_mensal FLOAT DEFAULT 0,
+                role VARCHAR(20) DEFAULT 'user',
+                meta_percentual FLOAT DEFAULT 70
+            );
+        """)
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS gastos (
-            id SERIAL PRIMARY KEY,
-            usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
-            valor FLOAT,
-            categoria VARCHAR(100),
-            data DATE,
-            tipo VARCHAR(20)
-        );
-    """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS gastos (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+                valor FLOAT,
+                categoria VARCHAR(100),
+                data DATE,
+                tipo VARCHAR(20)
+            );
+        """)
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print("Erro criando tabelas:", e)
 
-# RODA APENAS UMA VEZ NA INICIALIZAÇÃO
+# roda apenas quando o app inicia (não a cada request)
 criar_tabelas()
 
 # ================= FILTRO BRL =================
@@ -59,122 +62,131 @@ def brl(valor):
         return "R$ 0,00"
 
 # ================= LOGIN =================
-@app.route("/", methods=["GET","POST"])
+@app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM usuarios WHERE email=%s", (request.form["email"],))
-        user = cursor.fetchone()
-        conn.close()
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM usuarios WHERE email=%s", (request.form["email"],))
+            user = cursor.fetchone()
+            conn.close()
 
-        if user and check_password_hash(user["senha"], request.form["senha"]):
-            session["usuario_id"] = user["id"]
-            session["nome"] = user["nome"]
-            session["role"] = user["role"]
-            return redirect("/dashboard")
+            if user and check_password_hash(user["senha"], request.form["senha"]):
+                session["usuario_id"] = user["id"]
+                session["nome"] = user["nome"]
+                session["role"] = user["role"]
+                return redirect("/dashboard")
 
-        flash("Login inválido", "error")
+            flash("Login inválido", "error")
+
+        except Exception as e:
+            return f"Erro login: {e}"
 
     return render_template("login.html")
 
 # ================= DASHBOARD =================
-@app.route("/dashboard", methods=["GET","POST"])
+@app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
 
     if "usuario_id" not in session:
         return redirect("/")
 
     usuario_id = session["usuario_id"]
-    conn = get_connection()
-    cursor = conn.cursor()
 
-    # ===== POST =====
-    if request.method == "POST":
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
 
-        tipo = request.form.get("tipo")
+        # ===== POST =====
+        if request.method == "POST":
 
-        if tipo == "renda":
+            tipo = request.form.get("tipo")
+
+            if tipo == "renda":
+                cursor.execute(
+                    "UPDATE usuarios SET renda_mensal=%s WHERE id=%s",
+                    (float(request.form["renda_mensal"]), usuario_id)
+                )
+
+            elif tipo == "meta":
+                cursor.execute(
+                    "UPDATE usuarios SET meta_percentual=%s WHERE id=%s",
+                    (float(request.form["meta_percentual"]), usuario_id)
+                )
+
+            elif tipo == "gasto":
+                cursor.execute("""
+                    INSERT INTO gastos (usuario_id, valor, categoria, data, tipo)
+                    VALUES (%s,%s,%s,%s,%s)
+                """, (
+                    usuario_id,
+                    float(request.form["valor"]),
+                    request.form["categoria"],
+                    datetime.now().date(),
+                    request.form["tipo_gasto"]
+                ))
+
+            conn.commit()
+            conn.close()
+            return redirect("/dashboard")
+
+        # ===== EXCLUIR =====
+        excluir = request.args.get("excluir")
+        if excluir:
             cursor.execute(
-                "UPDATE usuarios SET renda_mensal=%s WHERE id=%s",
-                (float(request.form["renda_mensal"]), usuario_id)
+                "DELETE FROM gastos WHERE id=%s AND usuario_id=%s",
+                (excluir, usuario_id)
             )
+            conn.commit()
+            conn.close()
+            return redirect("/dashboard")
 
-        elif tipo == "meta":
-            cursor.execute(
-                "UPDATE usuarios SET meta_percentual=%s WHERE id=%s",
-                (float(request.form["meta_percentual"]), usuario_id)
-            )
+        # ===== BUSCAR DADOS =====
+        cursor.execute("SELECT * FROM gastos WHERE usuario_id=%s ORDER BY data DESC", (usuario_id,))
+        gastos = cursor.fetchall()
 
-        elif tipo == "gasto":
-            cursor.execute("""
-                INSERT INTO gastos (usuario_id, valor, categoria, data, tipo)
-                VALUES (%s,%s,%s,%s,%s)
-            """, (
-                usuario_id,
-                float(request.form["valor"]),
-                request.form["categoria"],
-                datetime.now().date(),
-                request.form["tipo_gasto"]
-            ))
+        cursor.execute("SELECT * FROM usuarios WHERE id=%s", (usuario_id,))
+        user = cursor.fetchone()
 
-        conn.commit()
+        renda = float(user["renda_mensal"] or 0)
+        total = sum(float(g["valor"]) for g in gastos)
+        saldo = renda - total
+
+        meta_percentual = float(user["meta_percentual"] or 0)
+        meta_valor = renda * (meta_percentual / 100)
+        percentual_usado = (total / meta_valor * 100) if meta_valor > 0 else 0
+
+        # ===== GRÁFICOS (tuplas compatíveis com i[0] i[1]) =====
+        cursor.execute("""
+            SELECT categoria, SUM(valor)
+            FROM gastos
+            WHERE usuario_id=%s
+            GROUP BY categoria
+        """, (usuario_id,))
+        resumo_categoria = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT tipo, SUM(valor)
+            FROM gastos
+            WHERE usuario_id=%s
+            GROUP BY tipo
+        """, (usuario_id,))
+        resumo_tipo = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT TO_CHAR(data,'MM/YYYY'), SUM(valor)
+            FROM gastos
+            WHERE usuario_id=%s
+            GROUP BY 1
+            ORDER BY 1
+        """, (usuario_id,))
+        evolucao_mensal = cursor.fetchall()
+
         conn.close()
-        return redirect("/dashboard")
 
-    # ===== EXCLUIR =====
-    excluir = request.args.get("excluir")
-    if excluir:
-        cursor.execute(
-            "DELETE FROM gastos WHERE id=%s AND usuario_id=%s",
-            (excluir, usuario_id)
-        )
-        conn.commit()
-        conn.close()
-        return redirect("/dashboard")
-
-    # ===== BUSCAR DADOS =====
-    cursor.execute("SELECT * FROM gastos WHERE usuario_id=%s ORDER BY data DESC", (usuario_id,))
-    gastos = cursor.fetchall()
-
-    cursor.execute("SELECT * FROM usuarios WHERE id=%s", (usuario_id,))
-    user = cursor.fetchone()
-
-    renda = float(user["renda_mensal"] or 0)
-    total = sum(float(g["valor"]) for g in gastos)
-    saldo = renda - total
-
-    meta_percentual = float(user["meta_percentual"] or 0)
-    meta_valor = renda * (meta_percentual / 100)
-    percentual_usado = (total / meta_valor * 100) if meta_valor > 0 else 0
-
-    # ===== GRÁFICOS =====
-    cursor.execute("""
-        SELECT categoria, SUM(valor)
-        FROM gastos
-        WHERE usuario_id=%s
-        GROUP BY categoria
-    """, (usuario_id,))
-    resumo_categoria = cursor.fetchall()
-
-    cursor.execute("""
-        SELECT tipo, SUM(valor)
-        FROM gastos
-        WHERE usuario_id=%s
-        GROUP BY tipo
-    """, (usuario_id,))
-    resumo_tipo = cursor.fetchall()
-
-    cursor.execute("""
-        SELECT TO_CHAR(data,'MM/YYYY'), SUM(valor)
-        FROM gastos
-        WHERE usuario_id=%s
-        GROUP BY 1
-        ORDER BY 1
-    """, (usuario_id,))
-    evolucao_mensal = cursor.fetchall()
-
-    conn.close()
+    except Exception as e:
+        return f"Erro dashboard: {e}"
 
     return render_template(
         "dashboard.html",
@@ -196,5 +208,7 @@ def logout():
     session.clear()
     return redirect("/")
 
+# IMPORTANTE PARA RENDER
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
