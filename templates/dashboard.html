@@ -10,15 +10,24 @@
 
 <body>
 
+<!-- TOAST -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="toast-container">
+      {% for category, message in messages %}
+        <div class="toast {{ category }}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
 <div class="sidebar">
     <h2>💳 FinancePro</h2>
-
-    <a href="/dashboard" class="{% if request.path == '/dashboard' %}active{% endif %}">
-        Dashboard
-    </a>
-
+    <a href="/dashboard" class="active">Dashboard</a>
     {% if session.get("role") == "admin" %}
-    <a href="/admin">Gerenciar Usuários</a>
+        <a href="/admin">Gerenciar Usuários</a>
     {% endif %}
 </div>
 
@@ -33,7 +42,7 @@
 
         <!-- FILTRO -->
         <div class="card">
-            <form method="GET" style="display:flex; gap:10px; flex-wrap:wrap;">
+            <form method="GET" class="filtro-form">
                 <select name="mes">
                     <option value="">Mês</option>
                     {% for i in range(1,13) %}
@@ -57,7 +66,7 @@
             </form>
         </div>
 
-        <!-- KPI -->
+        <!-- KPIs -->
         <div class="grid">
 
             <div class="card">
@@ -72,7 +81,8 @@
 
             <div class="card">
                 <h3>Saldo Atual</h3>
-                <div class="stat" style="color: {{ '#22c55e' if saldo >= 0 else '#ef4444' }}">
+                <div class="stat"
+                     style="color: {{ '#22c55e' if saldo >= 0 else '#ef4444' }}">
                     {{ saldo | brl }}
                 </div>
             </div>
@@ -86,9 +96,11 @@
                 <h3>Definir Meta (%)</h3>
                 <form method="POST">
                     <input type="hidden" name="tipo" value="meta">
-                    <input type="number" name="meta_percentual"
+                    <input type="number"
+                           name="meta_percentual"
                            value="{{ meta_percentual }}"
-                           min="1" max="100" required>
+                           min="1" max="100"
+                           required>
                     <button type="submit">Salvar Meta</button>
                 </form>
             </div>
@@ -116,7 +128,8 @@
             <h3>Definir Renda Mensal</h3>
             <form method="POST">
                 <input type="hidden" name="tipo" value="renda">
-                <input type="number" step="0.01"
+                <input type="number"
+                       step="0.01"
                        name="renda_mensal"
                        value="{{ renda_mensal }}"
                        required>
@@ -151,7 +164,6 @@
 
         <!-- GRÁFICOS -->
         <div class="grid">
-
             <div class="card">
                 <h3>Distribuição por Categoria</h3>
                 <canvas id="graficoCategoria"></canvas>
@@ -166,7 +178,6 @@
                 <h3>Evolução Mensal</h3>
                 <canvas id="graficoMensal"></canvas>
             </div>
-
         </div>
 
         <!-- LISTA -->
@@ -178,6 +189,7 @@
                 <div class="item-linha">
                     <div class="item-info">
                         <strong>{{ g.categoria }}</strong>
+
                         <span class="badge
                             {% if g.tipo == 'Fixa' %}
                                 badge-fixa
@@ -186,12 +198,18 @@
                             {% endif %}">
                             {{ g.tipo }}
                         </span>
+
                         <small>{{ g.data }}</small>
                     </div>
 
                     <div class="item-valor">
                         {{ g.valor | brl }}
-                        <a href="/dashboard?excluir={{g.id}}" class="excluir">Excluir</a>
+
+                        <a href="/dashboard?excluir={{g.id}}"
+                           class="excluir"
+                           onclick="return confirm('Tem certeza que deseja excluir esta conta?')">
+                           Excluir
+                        </a>
                     </div>
                 </div>
                 {% endfor %}
@@ -204,9 +222,9 @@
 </div>
 
 <script>
-const resumoCategoria = {{ resumo_categoria|tojson }};
-const resumoTipo = {{ resumo_tipo|tojson }};
-const evolucaoMensal = {{ evolucao_mensal|tojson }};
+const resumoCategoria = {{ resumo_categoria|default([])|tojson }};
+const resumoTipo = {{ resumo_tipo|default([])|tojson }};
+const evolucaoMensal = {{ evolucao_mensal|default([])|tojson }};
 
 if (resumoCategoria.length) {
     new Chart(document.getElementById("graficoCategoria"), {
@@ -243,6 +261,7 @@ if (evolucaoMensal.length) {
                 label: "Total por Mês",
                 data: evolucaoMensal.map(i => i.sum),
                 borderColor: "#22c55e",
+                tension: 0.4,
                 fill: false
             }]
         }

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, session
+from flask import Flask, render_template, request, redirect, session, flash
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -73,28 +73,9 @@ def login():
             session["role"] = user["role"]
             return redirect("/dashboard")
 
-        return "Login inválido"
+        flash("Login inválido", "error")
 
     return render_template("login.html")
-
-@app.route("/cadastro", methods=["GET","POST"])
-def cadastro():
-    if request.method == "POST":
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO usuarios (nome,email,senha)
-            VALUES (%s,%s,%s)
-        """, (
-            request.form["nome"],
-            request.form["email"],
-            generate_password_hash(request.form["senha"])
-        ))
-        conn.commit()
-        conn.close()
-        return redirect("/")
-
-    return render_template("cadastro.html")
 
 @app.route("/dashboard", methods=["GET","POST"])
 def dashboard():
@@ -108,14 +89,14 @@ def dashboard():
     if request.method == "POST":
 
         if request.form.get("tipo") == "renda":
-            cursor.execute("""
-                UPDATE usuarios SET renda_mensal=%s WHERE id=%s
-            """, (float(request.form["renda_mensal"]), usuario_id))
+            cursor.execute("UPDATE usuarios SET renda_mensal=%s WHERE id=%s",
+                           (float(request.form["renda_mensal"]), usuario_id))
+            flash("Renda atualizada com sucesso!", "success")
 
         elif request.form.get("tipo") == "meta":
-            cursor.execute("""
-                UPDATE usuarios SET meta_percentual=%s WHERE id=%s
-            """, (float(request.form["meta_percentual"]), usuario_id))
+            cursor.execute("UPDATE usuarios SET meta_percentual=%s WHERE id=%s",
+                           (float(request.form["meta_percentual"]), usuario_id))
+            flash("Meta atualizada!", "success")
 
         elif request.form.get("tipo") == "gasto":
             cursor.execute("""
@@ -128,30 +109,20 @@ def dashboard():
                 datetime.now().date(),
                 request.form["tipo_gasto"]
             ))
+            flash("Conta adicionada!", "success")
 
         conn.commit()
         return redirect("/dashboard")
 
     excluir = request.args.get("excluir")
     if excluir:
-        cursor.execute("DELETE FROM gastos WHERE id=%s AND usuario_id=%s", (excluir, usuario_id))
+        cursor.execute("DELETE FROM gastos WHERE id=%s AND usuario_id=%s",
+                       (excluir, usuario_id))
         conn.commit()
+        flash("Conta excluída!", "success")
         return redirect("/dashboard")
 
-    mes = request.args.get("mes")
-    ano = request.args.get("ano")
-
-    filtro = "WHERE usuario_id=%s"
-    params = [usuario_id]
-
-    if mes:
-        filtro += " AND EXTRACT(MONTH FROM data)=%s"
-        params.append(mes)
-    if ano:
-        filtro += " AND EXTRACT(YEAR FROM data)=%s"
-        params.append(ano)
-
-    cursor.execute(f"SELECT * FROM gastos {filtro} ORDER BY data DESC", tuple(params))
+    cursor.execute("SELECT * FROM gastos WHERE usuario_id=%s ORDER BY data DESC", (usuario_id,))
     gastos = cursor.fetchall()
 
     cursor.execute("SELECT * FROM usuarios WHERE id=%s", (usuario_id,))
@@ -161,33 +132,6 @@ def dashboard():
     total = sum(float(g["valor"]) for g in gastos)
     saldo = renda - total
 
-    meta_percentual = float(user["meta_percentual"] or 0)
-    meta_valor = renda * (meta_percentual/100)
-    percentual_usado = (total/meta_valor*100) if meta_valor > 0 else 0
-
-    cursor.execute(f"""
-        SELECT categoria, SUM(valor)
-        FROM gastos {filtro}
-        GROUP BY categoria
-    """, tuple(params))
-    resumo_categoria = cursor.fetchall()
-
-    cursor.execute(f"""
-        SELECT tipo, SUM(valor)
-        FROM gastos {filtro}
-        GROUP BY tipo
-    """, tuple(params))
-    resumo_tipo = cursor.fetchall()
-
-    cursor.execute(f"""
-        SELECT TO_CHAR(data,'MM/YYYY'), SUM(valor)
-        FROM gastos
-        WHERE usuario_id=%s
-        GROUP BY 1
-        ORDER BY 1
-    """, (usuario_id,))
-    evolucao = cursor.fetchall()
-
     conn.close()
 
     return render_template(
@@ -195,13 +139,7 @@ def dashboard():
         nome=session["nome"],
         gastos=gastos,
         renda_mensal=renda,
-        saldo=saldo,
-        meta_percentual=meta_percentual,
-        meta_valor=meta_valor,
-        percentual_usado=percentual_usado,
-        resumo_categoria=resumo_categoria,
-        resumo_tipo=resumo_tipo,
-        evolucao_mensal=evolucao
+        saldo=saldo
     )
 
 @app.route("/logout")
