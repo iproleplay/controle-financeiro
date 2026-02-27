@@ -46,10 +46,10 @@ def criar_tabelas():
     conn.close()
 
 @app.before_request
-def inicializar():
-    if not hasattr(app, "db_ok"):
+def init_db():
+    if not hasattr(app, "db_init"):
         criar_tabelas()
-        app.db_ok = True
+        app.db_init = True
 
 @app.template_filter("brl")
 def brl(valor):
@@ -79,6 +79,7 @@ def login():
 
 @app.route("/dashboard", methods=["GET","POST"])
 def dashboard():
+
     if "usuario_id" not in session:
         return redirect("/")
 
@@ -91,7 +92,7 @@ def dashboard():
         if request.form.get("tipo") == "renda":
             cursor.execute("UPDATE usuarios SET renda_mensal=%s WHERE id=%s",
                            (float(request.form["renda_mensal"]), usuario_id))
-            flash("Renda atualizada com sucesso!", "success")
+            flash("Renda atualizada!", "success")
 
         elif request.form.get("tipo") == "meta":
             cursor.execute("UPDATE usuarios SET meta_percentual=%s WHERE id=%s",
@@ -132,6 +133,15 @@ def dashboard():
     total = sum(float(g["valor"]) for g in gastos)
     saldo = renda - total
 
+    meta_percentual = float(user["meta_percentual"] or 0)
+    meta_valor = renda * (meta_percentual / 100)
+    percentual_usado = (total / meta_valor * 100) if meta_valor > 0 else 0
+
+    # gráficos
+    resumo_categoria = []
+    resumo_tipo = []
+    evolucao_mensal = []
+
     conn.close()
 
     return render_template(
@@ -139,7 +149,13 @@ def dashboard():
         nome=session["nome"],
         gastos=gastos,
         renda_mensal=renda,
-        saldo=saldo
+        saldo=saldo,
+        meta_percentual=meta_percentual,
+        meta_valor=meta_valor,
+        percentual_usado=percentual_usado,
+        resumo_categoria=resumo_categoria,
+        resumo_tipo=resumo_tipo,
+        evolucao_mensal=evolucao_mensal
     )
 
 @app.route("/logout")
